@@ -348,8 +348,8 @@ local Camera = Workspace.CurrentCamera
 local CONFIG = {
     PanicKey = Enum.KeyCode.End,
     ToggleKey = Enum.KeyCode.RightShift,
-    Accent = Color3.fromRGB(200, 200, 200),
-    Dark = Color3.fromRGB(8, 8, 8),
+    Accent = Color3.fromRGB(56, 189, 248), -- Sky Blue default
+    Dark = Color3.fromRGB(8, 18, 35),
     PanelWidth = 820,
     PanelHeight = 760,
     TabHeight = 46,
@@ -422,6 +422,7 @@ local State = {
     FOV = 70,
     Gravity = 196.2,
     Overlay = {Enabled = false, FPS = true, ServerName = true, Ping = true, Network = true, AutoShowOnClose = true},
+    Theme = "Sky Blue",
 
     ESP = {Enabled = false, TeamCheck = false, Boxes = true, Names = true, Health = true, Distance = true, Tracers = true, Tool = true, Color = Color3.fromRGB(255, 50, 50), Skeleton = false, Chams = true},
 
@@ -1720,7 +1721,7 @@ Instance.new("UICorner", BG).CornerRadius = UDim.new(0, 14)
 local BGStroke = Instance.new("UIStroke", BG); BGStroke.Color = Color3.fromRGB(40,40,40); BGStroke.Thickness = 2; BGStroke.Transparency = 0.3
 
 local AccentBar = Instance.new("Frame", MainFrame); AccentBar.Size = UDim2.new(1,0,0,3)
-AccentBar.BackgroundColor3 = Color3.fromRGB(60,60,60); AccentBar.BorderSizePixel = 0
+AccentBar.BackgroundColor3 = CONFIG.Accent; AccentBar.BorderSizePixel = 0
 
 local TitleArea = Instance.new("Frame", MainFrame); TitleArea.Size = UDim2.new(1,0,0,68); TitleArea.Position = UDim2.new(0,0,0,3)
 TitleArea.BackgroundColor3 = Color3.fromRGB(15,15,15); TitleArea.BorderSizePixel = 0
@@ -2589,6 +2590,29 @@ local OverlayRows = {
     Ping = CreateOverlayRow("Ping: --"),
     Network = CreateOverlayRow("Network: Checking..."),
 }
+local overlayDragging, overlayDragStart, overlayStartPosition = false, nil, nil
+StatusOverlay.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        overlayDragging = true
+        overlayDragStart = input.Position
+        overlayStartPosition = StatusOverlay.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if not overlayDragging or not overlayDragStart or not overlayStartPosition then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - overlayDragStart
+        local viewport = Camera and Camera.ViewportSize or Vector2.new(1920, 1080)
+        local x = math.clamp(overlayStartPosition.X.Offset + delta.X, -viewport.X * 0.45, viewport.X * 0.45)
+        local y = math.clamp(overlayStartPosition.Y.Offset + delta.Y, 8, math.max(8, viewport.Y - 110))
+        StatusOverlay.Position = UDim2.new(overlayStartPosition.X.Scale, x, overlayStartPosition.Y.Scale, y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        overlayDragging = false
+    end
+end)
 local overlayLastUpdate = 0
 local overlayGameName = "Loading..."
 local overlayNameUpdated = 0
@@ -2731,7 +2755,7 @@ end
 
 local function GetChangelogText()
     return table.concat({
-        "RBX 1.3.0 — OVERLAY / CLOSE-BEHAVIOR UPDATE",
+        "RBX 1.5.0 — SKY BLUE / THEMES / SAVE UPDATE",
         "",
         "ADDED",
         "• Live device profile: Mobile, Tablet, Desktop, or Console.",
@@ -2742,6 +2766,10 @@ local function GetChangelogText()
         "• Added an optional top status overlay for FPS, server name, ping, and network state.",
         "• Added automatic overlay display when the main panel is closed.",
         "• Added an Info-tab setting to control that close behavior.",
+        "• Sky Blue is now the default panel accent.",
+        "• Added 10 color themes: Sky Blue, Ocean, Purple, Emerald, Lime, Amber, Rose, Red, Orange, and White.",
+        "• Added drag support for the top status overlay on mouse and touch devices.",
+        "• Added simple saved-profile files: no JSON copy/paste is needed.",
         "",
         "STABILITY FIXES",
         "• Fixed minimize-time references to UI objects before their creation.",
@@ -2752,11 +2780,131 @@ local function GetChangelogText()
         "• Fixed arrow controls remaining visible in compact mobile mode.",
         "• Added a world-scan safety limit for future heavy scanners.",
         "• Fixed the empty-screen experience after closing the main panel.",
+        "• Fixed profile-load validation so invalid or incomplete files do not crash the panel.",
         "",
         "NOTES",
         "• Device layout updates automatically after rotation or window resizing.",
         "• Server data is shown only when Roblox exposes it."
     }, "\n")
+end
+
+-- Exports only client UI/preferences. Active feature toggles are intentionally not saved,
+-- so importing a profile cannot unexpectedly start a loop or change the character state.
+local function BuildSettingsProfile()
+    return {
+        Version = "1.4.0",
+        Overlay = {
+            Enabled = State.Overlay.Enabled, FPS = State.Overlay.FPS,
+            ServerName = State.Overlay.ServerName, Ping = State.Overlay.Ping,
+            Network = State.Overlay.Network, AutoShowOnClose = State.Overlay.AutoShowOnClose,
+        },
+        Display = {FOV = State.FOV, Gravity = State.Gravity},
+        Movement = {SpeedValue = State.Speed.Value, JumpPower = State.Jump.Power, FlySpeed = State.Fly.Speed},
+        Aimbot = {FOV = State.Aimbot.FOV, Smoothness = State.Aimbot.Smoothness, Part = State.Aimbot.Part, TeamCheck = State.Aimbot.TeamCheck},
+        FPSBoost = {
+            RemoveDecals = State.FPSBoost.RemoveDecals, RemoveParticles = State.FPSBoost.RemoveParticles,
+            RemoveTextures = State.FPSBoost.RemoveTextures, DisableShadows = State.FPSBoost.DisableShadows,
+            LowQuality = State.FPSBoost.LowQuality, RemoveTrails = State.FPSBoost.RemoveTrails,
+            RemoveBeams = State.FPSBoost.RemoveBeams, DisableLightingEffects = State.FPSBoost.DisableLightingEffects,
+        },
+    }
+end
+
+local function ApplySettingsProfile(data)
+    if type(data) ~= "table" then return false, "Profile must be a JSON object." end
+    local function copyBooleans(source, destination, allowed)
+        if type(source) ~= "table" then return end
+        for _, key in ipairs(allowed) do if type(source[key]) == "boolean" then destination[key] = source[key] end end
+    end
+    copyBooleans(data.Overlay, State.Overlay, {"Enabled", "FPS", "ServerName", "Ping", "Network", "AutoShowOnClose"})
+    copyBooleans(data.FPSBoost, State.FPSBoost, {"RemoveDecals", "RemoveParticles", "RemoveTextures", "DisableShadows", "LowQuality", "RemoveTrails", "RemoveBeams", "DisableLightingEffects"})
+    if type(data.Display) == "table" then
+        if type(data.Display.FOV) == "number" then State.FOV = math.clamp(data.Display.FOV, 40, 120) end
+        if type(data.Display.Gravity) == "number" then State.Gravity = math.clamp(data.Display.Gravity, 0, 500) end
+    end
+    if type(data.Movement) == "table" then
+        if type(data.Movement.SpeedValue) == "number" then State.Speed.Value = math.clamp(data.Movement.SpeedValue, 50, 500) end
+        if type(data.Movement.JumpPower) == "number" then State.Jump.Power = math.clamp(data.Movement.JumpPower, 50, 300) end
+        if type(data.Movement.FlySpeed) == "number" then State.Fly.Speed = math.clamp(data.Movement.FlySpeed, 10, 200) end
+    end
+    if type(data.Aimbot) == "table" then
+        if type(data.Aimbot.FOV) == "number" then State.Aimbot.FOV = math.clamp(data.Aimbot.FOV, 30, 500) end
+        if type(data.Aimbot.Smoothness) == "number" then State.Aimbot.Smoothness = math.clamp(data.Aimbot.Smoothness, 0.01, 1) end
+        if type(data.Aimbot.Part) == "string" then State.Aimbot.Part = data.Aimbot.Part end
+        if type(data.Aimbot.TeamCheck) == "boolean" then State.Aimbot.TeamCheck = data.Aimbot.TeamCheck end
+    end
+    return true
+end
+
+local ThemePresets = {
+    ["Sky Blue"] = Color3.fromRGB(56, 189, 248),
+    ["Ocean"] = Color3.fromRGB(14, 165, 233),
+    ["Purple"] = Color3.fromRGB(139, 92, 246),
+    ["Emerald"] = Color3.fromRGB(16, 185, 129),
+    ["Lime"] = Color3.fromRGB(132, 204, 22),
+    ["Amber"] = Color3.fromRGB(245, 158, 11),
+    ["Rose"] = Color3.fromRGB(244, 63, 94),
+    ["Red"] = Color3.fromRGB(239, 68, 68),
+    ["Orange"] = Color3.fromRGB(249, 115, 22),
+    ["White"] = Color3.fromRGB(226, 232, 240),
+}
+local ThemeOrder = {"Sky Blue", "Ocean", "Purple", "Emerald", "Lime", "Amber", "Rose", "Red", "Orange", "White"}
+local function ApplyTheme(themeName)
+    local accent = ThemePresets[themeName]
+    if not accent then return end
+    State.Theme = themeName
+    CONFIG.Accent = accent
+    AccentBar.BackgroundColor3 = accent
+    WMStroke.Color = accent
+    overlayStroke.Color = accent
+end
+
+-- Plain text persistence: no JSON is used. It is saved only when the runtime exposes file APIs.
+local PROFILE_FILE = "RBX_1_0_Hub_Profile.txt"
+local function EncodeProfileText()
+    local p = BuildSettingsProfile()
+    local lines = {"RBX_1_0_PROFILE=1.5.0", "Theme=" .. State.Theme}
+    local function put(prefix, values)
+        for key, value in pairs(values) do table.insert(lines, prefix .. key .. "=" .. tostring(value)) end
+    end
+    put("Overlay.", p.Overlay); put("Display.", p.Display); put("Movement.", p.Movement); put("Aimbot.", p.Aimbot); put("FPSBoost.", p.FPSBoost)
+    return table.concat(lines, "\n")
+end
+local function DecodeProfileText(text)
+    if type(text) ~= "string" or not text:find("RBX_1_0_PROFILE=", 1, true) then return nil, "Invalid saved profile." end
+    local raw = {}
+    for line in text:gmatch("[^\r\n]+") do
+        local key, value = line:match("^([^=]+)=(.*)$")
+        if key then raw[key] = value end
+    end
+    local function bool(key) return raw[key] == "true" and true or (raw[key] == "false" and false or nil) end
+    local function num(key) return tonumber(raw[key]) end
+    local data = {
+        Overlay = {}, Display = {}, Movement = {}, Aimbot = {}, FPSBoost = {},
+    }
+    for _, key in ipairs({"Enabled", "FPS", "ServerName", "Ping", "Network", "AutoShowOnClose"}) do data.Overlay[key] = bool("Overlay." .. key) end
+    for _, key in ipairs({"RemoveDecals", "RemoveParticles", "RemoveTextures", "DisableShadows", "LowQuality", "RemoveTrails", "RemoveBeams", "DisableLightingEffects"}) do data.FPSBoost[key] = bool("FPSBoost." .. key) end
+    for _, key in ipairs({"FOV", "Gravity"}) do data.Display[key] = num("Display." .. key) end
+    for _, key in ipairs({"SpeedValue", "JumpPower", "FlySpeed"}) do data.Movement[key] = num("Movement." .. key) end
+    data.Aimbot.FOV = num("Aimbot.FOV"); data.Aimbot.Smoothness = num("Aimbot.Smoothness")
+    data.Aimbot.Part = raw["Aimbot.Part"]; data.Aimbot.TeamCheck = bool("Aimbot.TeamCheck")
+    return data, raw.Theme
+end
+local function SaveProfileToFile()
+    if type(writefile) ~= "function" then return false, "File saving is unavailable in this runtime." end
+    local ok, err = pcall(writefile, PROFILE_FILE, EncodeProfileText())
+    return ok, ok and nil or tostring(err)
+end
+local function LoadProfileFromFile()
+    if type(readfile) ~= "function" or (type(isfile) == "function" and not isfile(PROFILE_FILE)) then return false, "No saved profile file was found." end
+    local ok, text = pcall(readfile, PROFILE_FILE)
+    if not ok then return false, tostring(text) end
+    local data, themeOrReason = DecodeProfileText(text)
+    if not data then return false, themeOrReason end
+    local applied, reason = ApplySettingsProfile(data)
+    if not applied then return false, reason end
+    ApplyTheme(ThemePresets[themeOrReason] and themeOrReason or "Sky Blue")
+    return true
 end
 
 -- ==================== FEATURES TABLE (FULLY FIXED) ====================
@@ -3672,9 +3820,10 @@ local Features = {
         end
     end},
 
-    {Category="Info", Type="Section", Text="RBX 1.3.0 • OVERLAY / CLOSE-BEHAVIOR UPDATE"},
+    {Category="Info", Type="Section", Text="RBX 1.5.0 • SKY BLUE / THEMES / SAVE UPDATE"},
     {Category="Info", Type="Changelog", Name="UPDATE NOTES", Value=GetChangelogText},
-    {Category="Info", Type="Info", Name="Build", Value="RBX 1.3.0"},
+    {Category="Info", Type="Button", Name="COPY UPDATE NOTES", Color=Color3.fromRGB(70,70,90), Callback=function() CopyToClipboard(GetChangelogText(), "Update notes") end},
+    {Category="Info", Type="Info", Name="Build", Value="RBX 1.5.0"},
     {Category="Info", Type="Info", Name="Device Profile", Value=function() return DeviceType end},
     {Category="Info", Type="Section", Text="TOP STATUS OVERLAY"},
     {Category="Info", Type="Toggle", Name="Show All Overlay Stats", Color=Color3.fromRGB(85,85,120), Default=false, Callback=function(v)
@@ -3720,6 +3869,19 @@ local Features = {
     end},
 
     {Category="Settings", Type="Section", Text="SETTINGS"},
+    {Category="Settings", Type="Section", Text="PROFILE SAVE / LOAD"},
+    {Category="Settings", Type="Button", Name="SAVE PROFILE", Color=Color3.fromRGB(14,116,144), Callback=function()
+        local ok, reason = SaveProfileToFile()
+        if ok then Notify("Settings", "Profile saved. You can load it next time.", 3, CONFIG.Accent)
+        else Notify("Settings", tostring(reason), 3, Color3.fromRGB(255,80,80)) end
+    end},
+    {Category="Settings", Type="Button", Name="LOAD SAVED PROFILE", Color=Color3.fromRGB(14,116,144), Callback=function()
+        local ok, reason = LoadProfileFromFile()
+        if ok then Notify("Settings", "Profile loaded. Reopen tabs to refresh controls.", 3, CONFIG.Accent)
+        else Notify("Settings", tostring(reason), 3, Color3.fromRGB(255,80,80)) end
+    end},
+    {Category="Settings", Type="Section", Text="COLOR THEME"},
+    {Category="Settings", Type="Dropdown", Name="UI Theme", Options=ThemeOrder, Default=1, Callback=function(theme) ApplyTheme(theme) end},
     {Category="Settings", Type="Keybind", Name="Aimbot Toggle Key", Default=State.CustomKeybinds.AimbotToggle, Callback=function(key)
         State.CustomKeybinds.AimbotToggle = key
         local name = typeof(key) == "EnumItem" and (key.EnumType == Enum.KeyCode and tostring(key):gsub("Enum.KeyCode.", "") or tostring(key):gsub("Enum.UserInputType.", "")) or "None"
@@ -3863,6 +4025,9 @@ local function GetCurrentDefault(feat)
         elseif name == "Farm Mode" then
             local modes = {"Coins","Mobs","Items"}
             for i, m in ipairs(modes) do if m == State.AutoFarm.Mode then return i end end
+            return 1
+        elseif name == "UI Theme" then
+            for i, theme in ipairs(ThemeOrder) do if theme == State.Theme then return i end end
             return 1
         else return feat.Default end
     else
