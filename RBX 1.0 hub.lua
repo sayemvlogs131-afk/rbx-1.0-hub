@@ -339,6 +339,7 @@ local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -420,6 +421,7 @@ local State = {
     Crosshair = false,
     FOV = 70,
     Gravity = 196.2,
+    Overlay = {Enabled = false, FPS = true, ServerName = true, Ping = true, Network = true, AutoShowOnClose = true},
 
     ESP = {Enabled = false, TeamCheck = false, Boxes = true, Names = true, Health = true, Distance = true, Tracers = true, Tool = true, Color = Color3.fromRGB(255, 50, 50), Skeleton = false, Chams = true},
 
@@ -470,6 +472,8 @@ local FPSBoostConnection = nil
 local CurrentAimbotTarget = nil
 local LastAimbotCache = 0
 local FPSBoostProcessing = false
+local FPSBoostGeneration = 0
+local MaxWorldScanObjects = 4000
 local HitboxConnections = {}
 local ReachConnection = nil
 local PlayerCache = {}
@@ -966,10 +970,13 @@ local function CreateLoadingScreen()
     return loader
 end
 
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("RBX_1_0_Hub")
+if oldGui then SafeCall(function() oldGui:Destroy() end) end
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "RBX_1_0_Hub"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = true
+ScreenGui.IgnoreGuiInset = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.Enabled = false -- Disabled until loading completes
@@ -1620,10 +1627,23 @@ Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 16)
 local MainScale = Instance.new("UIScale")
 MainScale.Name = "ResponsiveScale"
 MainScale.Parent = MainFrame
+local DeviceType = "Desktop"
+local function DetectDevice()
+    local viewport = Camera and Camera.ViewportSize or Vector2.new(1920, 1080)
+    if GuiService:IsTenFootInterface() then return "Console" end
+    if UserInputService.TouchEnabled then
+        return viewport.X < 600 and "Mobile" or "Tablet"
+    end
+    return "Desktop"
+end
 local function UpdateMainScale()
     local v = Camera and Camera.ViewportSize or Vector2.new(CONFIG.PanelWidth + 40, CONFIG.PanelHeight + 40)
-    local sx = math.max(0.55, (v.X - CONFIG.MinPanelMargin * 2) / CONFIG.PanelWidth)
-    local sy = math.max(0.55, (v.Y - CONFIG.MinPanelMargin * 2) / CONFIG.PanelHeight)
+    local topLeft, bottomRight = GuiService:GetGuiInset()
+    local safeWidth = math.max(1, v.X - topLeft.X - bottomRight.X - CONFIG.MinPanelMargin * 2)
+    local safeHeight = math.max(1, v.Y - topLeft.Y - bottomRight.Y - CONFIG.MinPanelMargin * 2)
+    DeviceType = DetectDevice()
+    local sx = safeWidth / CONFIG.PanelWidth
+    local sy = safeHeight / CONFIG.PanelHeight
     MainScale.Scale = math.min(1, sx, sy)
 end
 SafeCall(function()
@@ -1751,11 +1771,15 @@ do
     end)
 end
 
+local TabContainer, ContentFrame, LeftArrow, RightArrow
 local function ToggleUI(show)
     if PanicActive then return end
     uiVisible = show
     MainFrame.Visible = show
     Watermark.Visible = show
+    if not show and State.Overlay.AutoShowOnClose then
+        State.Overlay.Enabled = true
+    end
     if show then
         MainFrame.Position = UDim2.new(0.5, -CONFIG.PanelWidth/2, 0.5, -CONFIG.PanelHeight/2 + 40)
         local targetScale = MainScale.Scale
@@ -1796,14 +1820,16 @@ MinBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
-local TabContainer = Instance.new("Frame", MainFrame)
+TabContainer = Instance.new("ScrollingFrame", MainFrame)
 TabContainer.Size = UDim2.new(1, -76, 0, CONFIG.TabHeight); TabContainer.Position = UDim2.new(0, 38, 0, 76)
 TabContainer.BackgroundTransparency = 1
+TabContainer.BorderSizePixel = 0; TabContainer.ScrollBarThickness = 0; TabContainer.ScrollingDirection = Enum.ScrollingDirection.X
+TabContainer.AutomaticCanvasSize = Enum.AutomaticSize.X; TabContainer.CanvasSize = UDim2.new(0,0,0,0)
 
 local TabLayout = Instance.new("UIListLayout", TabContainer)
 TabLayout.FillDirection = Enum.FillDirection.Horizontal; TabLayout.Padding = UDim.new(0, 5); TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-local ContentFrame = Instance.new("ScrollingFrame", MainFrame)
+ContentFrame = Instance.new("ScrollingFrame", MainFrame)
 ContentFrame.Name = "Content"; ContentFrame.Size = UDim2.new(1, -28, 1, -142)
 ContentFrame.Position = UDim2.new(0, 14, 0, 132); ContentFrame.BackgroundTransparency = 1
 ContentFrame.ScrollBarThickness = 4; ContentFrame.ScrollBarImageColor3 = Color3.fromRGB(60,60,60)
@@ -1812,17 +1838,50 @@ ContentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y; ContentFrame.CanvasSize
 local ContentList = Instance.new("UIListLayout", ContentFrame)
 ContentList.Padding = UDim.new(0, 6)
 
-local LeftArrow = Instance.new("TextButton", MainFrame); LeftArrow.Size = UDim2.new(0,28,0,28)
+LeftArrow = Instance.new("TextButton", MainFrame); LeftArrow.Size = UDim2.new(0,28,0,28)
 LeftArrow.Position = UDim2.new(0,6,0,84); LeftArrow.BackgroundColor3 = Color3.fromRGB(30,30,30)
 LeftArrow.Text = "<"; LeftArrow.TextColor3 = CONFIG.Accent; LeftArrow.Font = Enum.Font.GothamBold; LeftArrow.TextSize = 14
 LeftArrow.AutoButtonColor = false; Instance.new("UICorner", LeftArrow).CornerRadius = UDim.new(0,6)
 
-local RightArrow = Instance.new("TextButton", MainFrame); RightArrow.Size = UDim2.new(0,28,0,28)
+RightArrow = Instance.new("TextButton", MainFrame); RightArrow.Size = UDim2.new(0,28,0,28)
 RightArrow.Position = UDim2.new(1,-34,0,84); RightArrow.BackgroundColor3 = Color3.fromRGB(30,30,30)
 RightArrow.Text = ">"; RightArrow.TextColor3 = CONFIG.Accent; RightArrow.Font = Enum.Font.GothamBold; RightArrow.TextSize = 14
 RightArrow.AutoButtonColor = false; Instance.new("UICorner", RightArrow).CornerRadius = UDim.new(0,6)
 AddHoverAnimation(LeftArrow, Color3.fromRGB(30,30,30), Color3.fromRGB(55,55,55))
 AddHoverAnimation(RightArrow, Color3.fromRGB(30,30,30), Color3.fromRGB(55,55,55))
+
+-- Reflows the existing tab/content hierarchy whenever the viewport or orientation changes.
+-- Mobile uses the same top tabs, but makes them horizontally swipeable and removes arrows.
+local function ApplyResponsiveLayout()
+    UpdateMainScale()
+    local mobile = DeviceType == "Mobile"
+    if mobile then
+        TabContainer.Position = UDim2.new(0, 8, 0, 76)
+        TabContainer.Size = UDim2.new(1, -16, 0, 52)
+        TabContainer.ScrollingDirection = Enum.ScrollingDirection.X
+        TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        ContentFrame.Position = UDim2.new(0, 8, 0, 136)
+        ContentFrame.Size = UDim2.new(1, -16, 1, -146)
+        ContentFrame.ScrollBarThickness = 3
+        LeftArrow.Visible = false
+        RightArrow.Visible = false
+    else
+        TabContainer.Position = UDim2.new(0, 38, 0, 76)
+        TabContainer.Size = UDim2.new(1, -76, 0, CONFIG.TabHeight)
+        TabContainer.ScrollingDirection = Enum.ScrollingDirection.X
+        TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        ContentFrame.Position = UDim2.new(0, 14, 0, 132)
+        ContentFrame.Size = UDim2.new(1, -28, 1, -142)
+        ContentFrame.ScrollBarThickness = 4
+        LeftArrow.Visible = true
+        RightArrow.Visible = true
+    end
+end
+
+SafeCall(function()
+    if Camera then Camera:GetPropertyChangedSignal("ViewportSize"):Connect(ApplyResponsiveLayout) end
+end)
+ApplyResponsiveLayout()
 
 -- ==================== UI COMPONENTS (FIXED) ====================
 local function CreateSection(parent, text)
@@ -2265,6 +2324,8 @@ end
 
 local function UpdateFPSBoost()
     if not State.FPSBoost.Enabled then
+        FPSBoostGeneration += 1
+        FPSBoostProcessing = false
         if FPSBoostConnection then 
             SafeCall(function() FPSBoostConnection:Disconnect() end)
             FPSBoostConnection = nil 
@@ -2310,18 +2371,23 @@ local function UpdateFPSBoost()
         end
     end
 
-    task.spawn(function()
-        local descendants = Workspace:GetDescendants()
-        local batchSize = 500
-        for i = 1, #descendants, batchSize do
-            if not State.FPSBoost.Enabled then break end
-            local endIdx = math.min(i + batchSize - 1, #descendants)
-            for j = i, endIdx do
-                ProcessFPSObject(descendants[j])
+    if not FPSBoostProcessing then
+        FPSBoostProcessing = true
+        local generation = FPSBoostGeneration
+        task.spawn(function()
+            local descendants = Workspace:GetDescendants()
+            local batchSize = 250
+            for i = 1, #descendants, batchSize do
+                if not State.FPSBoost.Enabled or generation ~= FPSBoostGeneration then break end
+                local endIdx = math.min(i + batchSize - 1, #descendants)
+                for j = i, endIdx do
+                    ProcessFPSObject(descendants[j])
+                end
+                task.wait()
             end
-            if i + batchSize <= #descendants then task.wait() end
-        end
-    end)
+            if generation == FPSBoostGeneration then FPSBoostProcessing = false end
+        end)
+    end
 
     if not FPSBoostConnection then
         FPSBoostConnection = Workspace.DescendantAdded:Connect(function(obj)
@@ -2482,6 +2548,76 @@ local function GetCurrentPingNumber()
     return ping
 end
 
+-- ==================== TOP STATUS OVERLAY ====================
+-- Kept separate from the panel so it remains readable while the panel is closed.
+local StatusOverlay = Instance.new("Frame", ScreenGui)
+StatusOverlay.Name = "TopStatusOverlay"
+StatusOverlay.AnchorPoint = Vector2.new(0.5, 0)
+StatusOverlay.Position = UDim2.new(0.5, 0, 0, 12)
+StatusOverlay.Size = UDim2.new(0, 280, 0, 0)
+StatusOverlay.AutomaticSize = Enum.AutomaticSize.Y
+StatusOverlay.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+StatusOverlay.BackgroundTransparency = 0.08
+StatusOverlay.BorderSizePixel = 0
+StatusOverlay.Visible = false
+StatusOverlay.ZIndex = 30
+Instance.new("UICorner", StatusOverlay).CornerRadius = UDim.new(0, 10)
+local overlayStroke = Instance.new("UIStroke", StatusOverlay)
+overlayStroke.Color = CONFIG.Accent; overlayStroke.Transparency = 0.35; overlayStroke.Thickness = 1
+local overlayPadding = Instance.new("UIPadding", StatusOverlay)
+overlayPadding.PaddingTop = UDim.new(0, 8); overlayPadding.PaddingBottom = UDim.new(0, 8)
+overlayPadding.PaddingLeft = UDim.new(0, 12); overlayPadding.PaddingRight = UDim.new(0, 12)
+local overlayList = Instance.new("UIListLayout", StatusOverlay)
+overlayList.Padding = UDim.new(0, 3); overlayList.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function CreateOverlayRow(prefix)
+    local row = Instance.new("TextLabel", StatusOverlay)
+    row.Size = UDim2.new(1, 0, 0, 20)
+    row.BackgroundTransparency = 1
+    row.Font = Enum.Font.GothamSemibold
+    row.TextSize = 12
+    row.TextColor3 = Color3.fromRGB(238, 238, 245)
+    row.TextXAlignment = Enum.TextXAlignment.Left
+    row.Text = prefix
+    row.ZIndex = 31
+    return row
+end
+
+local OverlayRows = {
+    FPS = CreateOverlayRow("FPS: --"),
+    ServerName = CreateOverlayRow("Server: Loading..."),
+    Ping = CreateOverlayRow("Ping: --"),
+    Network = CreateOverlayRow("Network: Checking..."),
+}
+local overlayLastUpdate = 0
+local overlayGameName = "Loading..."
+local overlayNameUpdated = 0
+Connect("TopStatusOverlay", RunService.Heartbeat, function()
+    if PanicActive or not State.Overlay.Enabled then
+        StatusOverlay.Visible = false
+        return
+    end
+    local now = tick()
+    if now - overlayLastUpdate < 0.25 then return end
+    overlayLastUpdate = now
+    if now - overlayNameUpdated > 20 then
+        overlayNameUpdated = now
+        overlayGameName = GetGameName()
+    end
+    local ping = GetCurrentPingNumber()
+    OverlayRows.FPS.Visible = State.Overlay.FPS
+    OverlayRows.ServerName.Visible = State.Overlay.ServerName
+    OverlayRows.Ping.Visible = State.Overlay.Ping
+    OverlayRows.Network.Visible = State.Overlay.Network
+    OverlayRows.FPS.Text = "FPS: " .. GetFPS()
+    OverlayRows.ServerName.Text = "Server: " .. overlayGameName
+    OverlayRows.Ping.Text = "Ping: " .. (ping and (tostring(math.floor(ping)) .. " ms") or "N/A")
+    OverlayRows.Network.Text = "Network: " .. (ping and (ping < 100 and "Stable" or "High latency") or "Unavailable")
+    local v = Camera and Camera.ViewportSize or Vector2.new(1920, 1080)
+    StatusOverlay.Size = UDim2.new(0, math.clamp(v.X - 24, 190, 280), 0, 0)
+    StatusOverlay.Visible = State.Overlay.FPS or State.Overlay.ServerName or State.Overlay.Ping or State.Overlay.Network
+end)
+
 local function GetServerRegion(server)
     if type(server) ~= "table" then return "N/A (not exposed)" end
     local value = server.country or server.region or server.location or server.geo or server.datacenter
@@ -2595,28 +2731,31 @@ end
 
 local function GetChangelogText()
     return table.concat({
-        "RBX 1.1.0 — LATEST UPDATE",
+        "RBX 1.3.0 — OVERLAY / CLOSE-BEHAVIOR UPDATE",
         "",
-        "NEW",
-        "• Info is now the FIRST tab.",
-        "• Added Join / Server Browser tab.",
-        "• Join any public server by Job ID.",
-        "• Check server status, members, ping and FPS when exposed by Roblox.",
-        "• Added lowest-ping and best-available server search.",
-        "• Added refresh, current Job ID copy, and rejoin tools.",
-        "• Added clearer status/error messages and safer HTTP fallbacks.",
+        "ADDED",
+        "• Live device profile: Mobile, Tablet, Desktop, or Console.",
+        "• Safe-area aware panel scaling using the current viewport and GUI inset.",
+        "• Automatic portrait/landscape reflow when the viewport changes.",
+        "• Mobile swipeable top-tab strip with larger touch targets.",
+        "• Duplicate GUI detection before the panel is created.",
+        "• Added an optional top status overlay for FPS, server name, ping, and network state.",
+        "• Added automatic overlay display when the main panel is closed.",
+        "• Added an Info-tab setting to control that close behavior.",
         "",
-        "FIXED",
-        "• Fixed the unfinished Info-string/parser issue.",
-        "• Fixed legacy branding/version leftovers from the previous build.",
-        "• Fixed key-gate and panic lifecycle cleanup.",
-        "• Fixed server lookup handling for missing/unavailable API data.",
-        "• Fixed server selection fallback when ping is not exposed.",
-        "• Hardened Job ID validation and teleport error handling.",
+        "STABILITY FIXES",
+        "• Fixed minimize-time references to UI objects before their creation.",
+        "• Fixed repeated FPS-boost scans stacking on top of each other.",
+        "• FPS boost now processes in smaller batches and yields between batches.",
+        "• Fixed responsive scale clamping that could leave small screens clipped.",
+        "• Fixed tab overflow on mobile by making the tab bar scrollable.",
+        "• Fixed arrow controls remaining visible in compact mobile mode.",
+        "• Added a world-scan safety limit for future heavy scanners.",
+        "• Fixed the empty-screen experience after closing the main panel.",
         "",
-        "LIMITS",
-        "• Region/country is shown only when the server data actually provides it; otherwise the UI reports N/A.",
-        "• Remote server ping is only shown when the Roblox server-list response contains it."
+        "NOTES",
+        "• Device layout updates automatically after rotation or window resizing.",
+        "• Server data is shown only when Roblox exposes it."
     }, "\n")
 end
 
@@ -3404,7 +3543,10 @@ local Features = {
             if now - LastAutoCollectScan >= 0.5 then
                 LastAutoCollectScan = now
                 AutoCollectTargets = {}
+                local scanned = 0
                 for _, obj in ipairs(Workspace:GetDescendants()) do
+                    scanned += 1
+                    if scanned > MaxWorldScanObjects then break end
                     if obj:IsA("BasePart") then
                         local n = obj.Name:lower()
                         if n:match("coin") or n:match("collect") or n:match("drop") then
@@ -3437,7 +3579,10 @@ local Features = {
                 AutoFarmTarget = nil
                 local bestDist = math.huge
                 if State.AutoFarm.Mode == "Mobs" then
+                    local scanned = 0
                     for _, obj in ipairs(Workspace:GetDescendants()) do
+                        scanned += 1
+                        if scanned > MaxWorldScanObjects then break end
                         if obj:IsA("Model") and obj ~= GetChar() and obj.Parent then
                             local hum = obj:FindFirstChildOfClass("Humanoid")
                             local root = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")
@@ -3448,7 +3593,10 @@ local Features = {
                         end
                     end
                 else
+                    local scanned = 0
                     for _, obj in ipairs(Workspace:GetDescendants()) do
+                        scanned += 1
+                        if scanned > MaxWorldScanObjects then break end
                         if obj:IsA("BasePart") then
                             local n = obj.Name:lower()
                             local match = (State.AutoFarm.Mode == "Coins" and (n:match("coin") or n:match("collect") or n:match("drop")))
@@ -3524,9 +3672,20 @@ local Features = {
         end
     end},
 
-    {Category="Info", Type="Section", Text="RBX 1.1.0 • WHAT'S NEW / WHAT'S FIXED"},
+    {Category="Info", Type="Section", Text="RBX 1.3.0 • OVERLAY / CLOSE-BEHAVIOR UPDATE"},
     {Category="Info", Type="Changelog", Name="UPDATE NOTES", Value=GetChangelogText},
-    {Category="Info", Type="Info", Name="Build", Value="RBX 1.1.0"},
+    {Category="Info", Type="Info", Name="Build", Value="RBX 1.3.0"},
+    {Category="Info", Type="Info", Name="Device Profile", Value=function() return DeviceType end},
+    {Category="Info", Type="Section", Text="TOP STATUS OVERLAY"},
+    {Category="Info", Type="Toggle", Name="Show All Overlay Stats", Color=Color3.fromRGB(85,85,120), Default=false, Callback=function(v)
+        State.Overlay.Enabled = v
+        if v then State.Overlay.FPS = true; State.Overlay.ServerName = true; State.Overlay.Ping = true; State.Overlay.Network = true end
+    end},
+    {Category="Info", Type="Toggle", Name="Show Overlay When Panel Closes", Color=Color3.fromRGB(75,75,95), Default=true, Callback=function(v) State.Overlay.AutoShowOnClose = v end},
+    {Category="Info", Type="Toggle", Name="Overlay FPS", Color=Color3.fromRGB(75,75,95), Default=true, Callback=function(v) State.Overlay.FPS = v end},
+    {Category="Info", Type="Toggle", Name="Overlay Server Name", Color=Color3.fromRGB(75,75,95), Default=true, Callback=function(v) State.Overlay.ServerName = v end},
+    {Category="Info", Type="Toggle", Name="Overlay Ping", Color=Color3.fromRGB(75,75,95), Default=true, Callback=function(v) State.Overlay.Ping = v end},
+    {Category="Info", Type="Toggle", Name="Overlay Network", Color=Color3.fromRGB(75,75,95), Default=true, Callback=function(v) State.Overlay.Network = v end},
     {Category="Info", Type="Section", Text="INFO / LIVE CLIENT STATUS"},
     {Category="Info", Type="Info", Name="Game Name", Value=function() return GetGameName() end},
     {Category="Info", Type="Info", Name="Place ID", Value=function() return tostring(game.PlaceId) end, Button="Copy", Callback=function() CopyToClipboard(game.PlaceId, "Place ID") end},
@@ -3645,6 +3804,12 @@ local function GetCurrentDefault(feat)
         elseif name == "Auto Collect" then return State.AutoCollect.Enabled
         elseif name == "Auto Farm" then return State.AutoFarm.Enabled
         elseif name == "Enable FPS Boost" then return State.FPSBoost.Enabled
+        elseif name == "Show All Overlay Stats" then return State.Overlay.Enabled
+        elseif name == "Show Overlay When Panel Closes" then return State.Overlay.AutoShowOnClose
+        elseif name == "Overlay FPS" then return State.Overlay.FPS
+        elseif name == "Overlay Server Name" then return State.Overlay.ServerName
+        elseif name == "Overlay Ping" then return State.Overlay.Ping
+        elseif name == "Overlay Network" then return State.Overlay.Network
         elseif name == "Remove Decals" then return State.FPSBoost.RemoveDecals
         elseif name == "Remove Particles" then return State.FPSBoost.RemoveParticles
         elseif name == "Remove Textures" then return State.FPSBoost.RemoveTextures
@@ -3800,7 +3965,7 @@ local function RenderTab(index)
     ContentFrame.CanvasPosition = Vector2.new(0, 0)
 end
 
-local tabWidth = math.max(42, math.floor((CONFIG.PanelWidth - 70 - (5 * (#CONFIG.Categories - 1))) / #CONFIG.Categories))
+local tabWidth = DeviceType == "Mobile" and 118 or math.max(42, math.floor((CONFIG.PanelWidth - 70 - (5 * (#CONFIG.Categories - 1))) / #CONFIG.Categories))
 for i, name in ipairs(CONFIG.Categories) do
     local btn = Instance.new("TextButton", TabContainer)
     btn.Size = UDim2.new(0, tabWidth, 1, -4); btn.Position = UDim2.new(0, 0, 0, 2)
@@ -3812,6 +3977,7 @@ for i, name in ipairs(CONFIG.Categories) do
     btn.MouseButton1Click:Connect(function() if not PanicActive then RenderTab(i) end end)
     table.insert(TabButtons, btn)
 end
+ApplyResponsiveLayout()
 
 LeftArrow.MouseButton1Click:Connect(function() if not PanicActive then RenderTab(CurrentTab - 1) end end)
 RightArrow.MouseButton1Click:Connect(function() if not PanicActive then RenderTab(CurrentTab + 1) end end)
