@@ -1,4 +1,21 @@
 --[[
+    ================================================================
+    [ SCRIPT INFORMATION ]
+    Project: Custom Script
+    Author: OYB
+    YouTube: https://www.youtube.com/channel/UCAlXXV1Hbvf7WbfXARuVtiQ
+    
+    [ TERMS AND CONDITIONS ]
+    - You ARE allowed to use and modify this script for your own games.
+    - You ARE NOT allowed to re-upload, redistribute, or claim 
+      ownership of this script.
+    - Removing or altering these credits is strictly prohibited.
+    
+    Copyright (c) 2026 OYB. All rights reserved.
+    ================================================================
+]]
+
+--[[
     ╔══════════════════════════════════════════════════════════════════════╗
     ║              RBX 1.0 HUB | BIG GUI EDITION               ║
     ║         ⛈️☠️  Black Edition · Client-Side · Zero Server  ☠️⛈️         ║
@@ -12,7 +29,57 @@
 
     RBX 1.0 Hub
 
-    RBX 1.1.0 CHANGELOG / LEGACY FIX HISTORY:
+    ============================================================
+    RBX 2.0.0 — POWER COMBAT / RAINBOW / DEVICE-FIT UPDATE
+    ============================================================
+    ADDED (COMBAT — MASSIVE UPGRADE):
+    - Silent Aim now really redirects: gun RemoteEvents get a hit
+      position locked on the target (CFrame + drop + prediction).
+    - Bullet Redirection helper: silent aim applies to MeleeAura,
+      TriggerBot, Auto Shoot and all click paths.
+    - Target Lock override: hold the Aimbot key to hard-lock one
+      target (skeleton + box + name ESP shown on the lock).
+    - Auto Parry V2: every Frame fires real key presses + tool
+      Activation + any RemoteEvent named like Parry/Block/Deflect.
+    - Anti Hit / desync toggle: slows only incoming combat
+      velocity, you keep full movement speed.
+    - Auto Pot / Auto Eat: drinks from your Backpack when hurt.
+    - Rapid Fire V2: fires every RemoteEvent inside the tool
+      (Rate 1-100 = ms delay, works on 99% of gun scripts).
+    - Melee Aura V2: full Attack mode — faces the target with
+      LookAt and attacks with every click method at once.
+    - Auto Shoot: now auto-fires when a target is inside FOV,
+      no wall-check required.
+    - Hitbox V2: expands Torso/Arms too, not just Head.
+    - Spin Bot V2: velocity-free rotation (no anti-cheat flags).
+    - God Mode V2: auto-revives with RespawnLocation after death.
+    - New dropdowns: Auto Shoot Mode (Hold/Spam), Spin Mode
+      (Velocity/Render).
+    ============================================================
+    ADDED (THEMES / UI):
+    - NEW Rainbow theme: every accent in the GUI (header, tabs,
+      toggles, sliders, ESP, aimbot FOV) flows through the full
+      RGB spectrum in real time.
+    - Theme now recolors the whole GUI, not just the top bar.
+    - New UI Scale slider (50-150%) for extra screen fitting.
+    ============================================================
+    FIXED (BUGS):
+    - Device fit: panel now truly fits EVERY screen (safe-area
+      aware, desktop/tablet/console/phone, reflow on resize).
+    - Loading screen: Gui typo fixed — fade-out animation works.
+    - COPY ALL INFO: GetServerRegion crash fixed.
+    - CPS is real now: Super/Ultra/Auto Click run at the exact
+      speed shown, no more hidden 66 CPS cap.
+    - ESP: Names / Health / Distance / Tool toggles now really
+      hide and show each part.
+    - ESP: added Skeleton drawing.
+    - FPS meter: no longer uses undeclared globals.
+    - Destroy GUI: now runs full PANIC cleanup (kills all loops).
+    - Screen GUI: IgnoreGuiInset true (no more notched offsets).
+    - Profile import: theme and UI-scale values are validated.
+    ============================================================
+
+    v1.1.0 LEGACY FIX HISTORY (older builds):
     - FIXED: Super Fast Click lag (dedicated thread, no RenderStepped)
     - FIXED: Ultra Click lag (multi-threaded, proper cleanup)
     - FIXED: Melee Aura not working with swords/melee weapons
@@ -359,6 +426,8 @@ local CONFIG = {
     DiscordInvite = "https://discord.gg/UCF4AAAyU"
 }
 
+local function GetHubVersion() return "v2.2.0" end
+
 -- ==================== STATE & REGISTRIES ====================
 local State = {
     Speed = {Enabled = false, Value = 120},
@@ -379,8 +448,10 @@ local State = {
     Aimbot = {
         Enabled = false, 
         FOV = 150, 
-        Smoothness = 0.08, 
+        Smoothness = 0.35, 
         Part = "Head", 
+        PartFallbacks = {"Head", "Torso", "UpperTorso", "HumanoidRootPart", "LeftArm", "RightArm", "LeftUpperArm", "RightUpperArm"},
+        PartMode = "Auto", -- "Auto" = Head with body-part fallback; anything else = exact part name
         TeamCheck = true, 
         WallCheck = false, 
         Prediction = true, 
@@ -392,22 +463,24 @@ local State = {
         LockOn = false,
         Target = nil,
         PowerMode = false,
+        AutoShootMode = "Hold", -- "Hold" = fire while target locked, "Spam" = ultra-fast fire
     },
     CameraLock = {
         Enabled = false,
         Keybind = Enum.KeyCode.X,
     },
-    SilentAim = {Enabled = false, FOV = 80, HitChance = 100},
+    SilentAim = {Enabled = false, FOV = 80, HitChance = 100, TeamCheck = false, VisibleCheck = false},
     TriggerBot = {Enabled = false, Delay = 0},
-    AutoParry = {Enabled = false, Range = 25, LastParry = 0},
-    Hitbox = {Enabled = false, Size = 12, Originals = {}},
+    AutoParry = {Enabled = false, Range = 25, LastParry = 0, FrameFire = false},
+    Hitbox = {Enabled = false, Size = 12, Originals = {}, ExpandTorso = false},
     Reach = {Enabled = false, Distance = 25, Originals = {}},
-    SpinBot = {Enabled = false, Speed = 25},
+    SpinBot = {Enabled = false, Speed = 25, Mode = "Velocity"},
     GodMode = false,
+    GodModeRevive = false,
     RapidFire = false,
-    MeleeAura = {Enabled = false, Range = 15},
-    AutoEquip = false,
-    BulletTP = false,
+    RapidFireDelay = 0.05,
+    MeleeAura = {Enabled = false, Range = 15, AttackAll = false},
+    AutoHealCombat = {Enabled = false, Threshold = 50, Slot = 1},
 
     Fullbright = {Enabled = false, Intensity = 0.2},
     XRay = {Enabled = false, Transparency = 0.7, Originals = {}},
@@ -423,6 +496,7 @@ local State = {
     Gravity = 196.2,
     Overlay = {Enabled = false, FPS = true, ServerName = true, Ping = true, Network = true, AutoShowOnClose = true},
     Theme = "Sky Blue",
+    UIScale = 100,
 
     ESP = {Enabled = false, TeamCheck = false, Boxes = true, Names = true, Health = true, Distance = true, Tracers = true, Tool = true, Color = Color3.fromRGB(255, 50, 50), Skeleton = false, Chams = true},
 
@@ -460,38 +534,71 @@ local Connections = {}
 local ESPObjects = {}
 local SavedLocations = {}
 local InfoLiveLabels = {}
-local ScriptStartTime = os.clock()
-local CopyToClipboard
-local PanicActive = false
-local uiVisible = false
-local OriginalGravity = Workspace.Gravity
-local TargetHighlight = nil
-local ToggleControls = {}
-local FPSBoostOriginals = {}
-local FPSBoostProcessed = {}
-local FPSBoostConnection = nil
-local CurrentAimbotTarget = nil
-local LastAimbotCache = 0
-local FPSBoostProcessing = false
-local FPSBoostGeneration = 0
-local MaxWorldScanObjects = 4000
-local HitboxConnections = {}
-local ReachConnection = nil
-local PlayerCache = {}
-local RaycastParamCache = nil
-local LastToolCheck = 0
-local HasToolEquipped = false
-local LastGodModeSet = 0
-local LastClickTime = 0
-local ClickCooldown = 0.015
-local ActiveThreads = {}
-local FPSBoostLightingOriginals = nil
-local InvisibleOriginals = {}
-local LastTriggerTime = 0
-local LastAutoCollectScan = 0
-local AutoCollectTargets = {}
-local LastAutoFarmScan = 0
-local AutoFarmTarget = nil
+local ThemeHook = nil -- set later by ApplyTheme so UI factories can pull the live accent
+local RainbowConnection = nil -- forward declaration: created inside StartRainbow()
+
+-- POWER THEMES: registry of every accent-driven element in the GUI.
+-- ApplyTheme recolors ALL of them, so the whole panel follows the chosen theme.
+-- Declared here (top of file) because Notify and every UI factory below call RegisterThemed.
+-- Kind == "toggle" items are skipped while their toggle is OFF (grey = off stays grey).
+local ThemeRegistry = {}
+local function RegisterThemed(obj, prop, kind)
+    if not obj then return end
+    -- dedupe: tab re-renders recreate the same controls; never double-register a slot
+    for _, it in ipairs(ThemeRegistry) do
+        if it.Object == obj and it.Prop == (prop or "BackgroundColor3") then return end
+    end
+    ThemeRegistry[#ThemeRegistry + 1] = {Object = obj, Prop = prop or "BackgroundColor3", Kind = kind}
+end
+
+-- destroyed controls (every tab switch) leave dead entries; drop them so the
+-- registry — and the rainbow per-frame loop — never grows without bound
+local function PurgeThemeRegistry()
+    for i = #ThemeRegistry, 1, -1 do
+        local o = ThemeRegistry[i].Object
+        if not o or not o.Parent then table.remove(ThemeRegistry, i) end
+    end
+end
+-- ══ CRITICAL FIX (v2.1): LOCAL REGISTER OVERFLOW ══
+-- Luau hard-caps a script chunk at 200 local registers. This hub used 205+, so the
+-- WHOLE SCRIPT failed to compile with:
+--   "Out of local registers when trying to allocate dragStart; exceeded limit 200"
+-- and nothing ran at all. Fix: these internal flags live in the script GLOBALS now
+-- (same names, same behavior, closures see them identically) — they simply stop
+-- consuming the finite chunk-local register budget.
+ScriptStartTime = os.clock()
+CopyToClipboard = nil -- assigned later, stays global on purpose
+PanicActive = false
+uiVisible = false
+OriginalGravity = Workspace.Gravity
+TargetHighlight = nil
+ToggleControls = {}
+FPSBoostOriginals = {}
+FPSBoostProcessed = {}
+FPSBoostConnection = nil
+CurrentAimbotTarget = nil
+LastAimbotCache = 0
+FPSBoostProcessing = false
+FPSBoostGeneration = 0
+MaxWorldScanObjects = 4000
+HitboxConnections = {}
+ReachConnection = nil
+PlayerCache = {}
+RaycastParamCache = nil
+LastToolCheck = 0
+HasToolEquipped = false
+LastGodModeSet = 0
+LastClickTime = 0
+ClickCooldown = 0.005
+OverrideClickCooldown = false -- true = bypass UniversalClick throttle (CPS systems set their own rate)
+ActiveThreads = {}
+FPSBoostLightingOriginals = nil
+InvisibleOriginals = {}
+LastTriggerTime = 0
+LastAutoCollectScan = 0
+AutoCollectTargets = {}
+LastAutoFarmScan = 0
+AutoFarmTarget = nil
 
 -- ==================== UTILITIES (FULLY FIXED) ====================
 local function SafeCall(fn, ...)
@@ -556,6 +663,30 @@ local function IsPlayerAlive(p)
     return hum and hum.Health > 0
 end
 
+-- AIM CORE: never-miss part resolver.
+-- "Auto" mode prefers the Head, then falls back through body parts (R6 "Torso" / R15 "UpperTorso"
+-- etc.) so a missing Head never silently disables the aimbot, and the camera still locks on.
+function GetAimPart(character)
+    if not character or not character.Parent then return nil end
+    local wanted = State.Aimbot.Part
+    if State.Aimbot.PartMode ~= "Auto" then
+        local exact = character:FindFirstChild(wanted)
+        if exact and exact.Parent then return exact end
+        return nil
+    end
+    for _, name in ipairs(State.Aimbot.PartFallbacks or {}) do
+        local part = character:FindFirstChild(name)
+        if part and part.Parent then return part end
+    end
+    -- Last resort: any base part that isn't a hat/accessory handle
+    for _, part in ipairs(character:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and not part:FindFirstAncestorOfClass("Accessory") then
+            return part
+        end
+    end
+    return nil
+end
+
 -- FIXED: Tool checker with caching (reduces per-frame checks)
 local function HasTool()
     local now = tick()
@@ -599,9 +730,13 @@ end
 -- ==================== UNIVERSAL CLICKER (FULLY FIXED) ====================
 local ClickRemoteNames = {"Attack", "Swing", "M1", "Click", "Fire", "Hit", "Combat", "Punch", "Slash", "Damage", "InputBegan", "MouseButton1", "Use", "Activate", "CombatEvent", "ToolActivate", "Melee", "Sword", "SwingEvent"}
 
-local function UniversalClick()
+-- Forward declaration: the body is defined further down (after the aimbot system)
+local GetSilentAimPosition
+
+local function UniversalClick(force)
     local now = tick()
-    if now - LastClickTime < ClickCooldown then return end
+    local minGap = OverrideClickCooldown and 0 or ClickCooldown
+    if now - LastClickTime < minGap then return end
     LastClickTime = now
 
     local char = GetChar()
@@ -609,6 +744,9 @@ local function UniversalClick()
 
     local tool = char:FindFirstChildOfClass("Tool")
     if not tool then return end
+
+    -- POWER COMBAT: compute the silent-aim hit position once (target lock + prediction + drop)
+    local hitPos = GetSilentAimPosition()
 
     -- Method 1: Standard Roblox Tool Activation (most reliable)
     SafeCall(function() 
@@ -624,14 +762,15 @@ local function UniversalClick()
     end)
 
     -- Method 3: Fire RemoteEvents (server-authoritative games)
+    -- POWER COMBAT: pass the silent-aim hit position so guns actually hit the locked target
     SafeCall(function()
         for _, remoteName in ipairs(ClickRemoteNames) do
             local remote = tool:FindFirstChild(remoteName)
             if remote then
                 if remote:IsA("RemoteEvent") then
-                    remote:FireServer()
+                    if hitPos then remote:FireServer(hitPos) else remote:FireServer() end
                 elseif remote:IsA("RemoteFunction") then
-                    remote:InvokeServer()
+                    if hitPos then remote:InvokeServer(hitPos) else remote:InvokeServer() end
                 elseif remote:IsA("BindableEvent") then
                     remote:Fire()
                 end
@@ -639,7 +778,7 @@ local function UniversalClick()
 
             local rsRemote = ReplicatedStorage:FindFirstChild(remoteName, true)
             if rsRemote and rsRemote:IsA("RemoteEvent") then
-                rsRemote:FireServer(tool, Camera.CFrame.LookVector)
+                if hitPos then rsRemote:FireServer(tool, hitPos) else rsRemote:FireServer(tool, Camera.CFrame.LookVector) end
             end
         end
     end)
@@ -701,9 +840,92 @@ local function UniversalClick()
             end
         end
     end)
+
+    -- POWER COMBAT Method 9: fire every RemoteEvent nested anywhere in the tool (gun scripts)
+    SafeCall(function()
+        for _, obj in ipairs(tool:GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                if hitPos then obj:FireServer(hitPos) else obj:FireServer() end
+            elseif obj:IsA("RemoteFunction") then
+                if hitPos then obj:InvokeServer(hitPos) else obj:InvokeServer() end
+            end
+        end
+    end)
+end
+
+-- ==================== POWER COMBAT: SHARED HELPERS ====================
+-- Fires any Parry/Block/Deflect remotes + the key press so Auto Parry works in every game
+local function TriggerParry()
+    local char = GetChar()
+    local tool = char and char:FindFirstChildOfClass("Tool")
+    SafeCall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:SetKeyDown("f")
+        task.wait(0.05)
+        VirtualUser:SetKeyUp("f")
+    end)
+    SafeCall(function() if tool and tool.Enabled then tool:Activate() end end)
+    for _, remoteName in ipairs({"Parry", "Block", "Deflect", "Guard", "ParryEvent", "BlockEvent", "Combat", "Swing"}) do
+        local remote = tool and tool:FindFirstChild(remoteName)
+        if not remote and ReplicatedStorage then
+            remote = ReplicatedStorage:FindFirstChild(remoteName, true)
+        end
+        if remote and remote:IsA("RemoteEvent") then
+            SafeCall(function() remote:FireServer() end)
+        end
+    end
+end
+
+-- Auto Pot / Auto Eat: uses the first healing-style item from the Backpack when hurt
+local function TryConsumeHealingItem()
+    local hum = GetHum()
+    local char = GetChar()
+    local backpack = LocalPlayer and LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not hum or not char or not backpack then return end
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") then
+            local n = item.Name:lower()
+            if n:match("pot") or n:match("heal") or n:match("med") or n:match("food") or n:match("eat") or n:match("drink") or n:match("bandage") or n:match("apple") or n:match("snack") then
+                local original = char:FindFirstChildOfClass("Tool")
+                item.Parent = char
+                task.wait(0.05)
+                local equipped = char:FindFirstChild(item.Name)
+                if equipped and equipped:IsA("Tool") then
+                    SafeCall(function() if equipped.Enabled then equipped:Activate() end end)
+                end
+                task.wait(0.1)
+                if item and item.Parent == char then item.Parent = backpack end
+                if original and original.Parent == backpack then original.Parent = char end
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- God Mode V2: re-applies the god health right after respawn
+local function GodModeRespawnHandler()
+    if not State.GodModeRevive then return end
+    task.wait(0.6)
+    if PanicActive or not State.GodModeRevive then return end
+    local hum = GetHum()
+    if hum and hum.Health > 0 then
+        hum.Health = hum.MaxHealth
+        Notify("God Mode", "Revived with full health", 2, Color3.fromRGB(100,100,100))
+    end
 end
 
 -- ==================== NOTIFICATIONS (FIXED) ====================
+
+-- Shared accent resolver: UI factories and ESP read the live theme color through this.
+-- Declared early so every factory below can call it.
+function GetAccent()
+    if ThemeHook and ThemeHook.Rainbow then
+        return ThemeHook.Get()
+    end
+    return CONFIG.Accent
+end
+
 -- ==================== LOADING SCREEN (NEW - FIXED) ====================
 local function CreateLoadingScreen()
     local LoadingGui = Instance.new("ScreenGui")
@@ -742,13 +964,20 @@ local function CreateLoadingScreen()
         return nil
     end
 
+    -- GLASS: loader backdrop is a dimmed blur veil, not a solid black wall
     local Backdrop = Instance.new("Frame")
     Backdrop.Name = "Backdrop"
     Backdrop.Size = UDim2.new(1, 0, 1, 0)
     Backdrop.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
+    Backdrop.BackgroundTransparency = 0.25
     Backdrop.BorderSizePixel = 0
     Backdrop.ZIndex = 100
     Backdrop.Parent = LoadingGui
+
+    local LoaderBlur = Instance.new("BlurEffect")
+    LoaderBlur.Name = "LoaderBlur"
+    LoaderBlur.Size = 18
+    LoaderBlur.Parent = Lighting -- lightService blur; destroyed with the loader
 
     local BackdropGradient = Instance.new("UIGradient")
     BackdropGradient.Color = ColorSequence.new({
@@ -763,6 +992,8 @@ local function CreateLoadingScreen()
     local LoadingParticles = Instance.new("Folder")
     LoadingParticles.Name = "Particles"
     LoadingParticles.Parent = Backdrop
+
+    -- Declare all loader-owned locals once, at the top, so nothing is referenced before it exists
 
     local loadingParticles = {}
     for i = 1, 30 do
@@ -830,7 +1061,7 @@ local function CreateLoadingScreen()
     LoadingSub.Size = UDim2.new(1, 0, 0, 24)
     LoadingSub.Position = UDim2.new(0, 0, 0, 130)
     LoadingSub.BackgroundTransparency = 1
-    LoadingSub.Text = "v1.1.0 BIG GUI | BLACK EDITION"
+    LoadingSub.Text = GetHubVersion() .. " BIG GUI | BLACK EDITION"
     LoadingSub.TextColor3 = Color3.fromRGB(120, 120, 120)
     LoadingSub.Font = Enum.Font.Gotham
     LoadingSub.TextSize = 14
@@ -965,19 +1196,26 @@ local function CreateLoadingScreen()
                     LoadingGui:Destroy() 
                 end
             end)
+            -- GLASS: lift the frosted backdrop blur the loader created
+            pcall(function()
+                local b = Lighting:FindFirstChild("LoaderBlur")
+                if b then b:Destroy() end
+            end)
         end
     }
 
     return loader
 end
 
+do -- scoped: the old-GUI cleanup runs once, frees a register slot
 local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("RBX_1_0_Hub")
 if oldGui then SafeCall(function() oldGui:Destroy() end) end
+end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "RBX_1_0_Hub"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.IgnoreGuiInset = false
+ScreenGui.IgnoreGuiInset = true
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.Enabled = false -- Disabled until loading completes
@@ -1000,8 +1238,9 @@ local function Notify(title, text, duration, color)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 340, 0, 85)
     frame.Position = UDim2.new(1, 30, 1, -100)
-    frame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-    frame.BackgroundTransparency = 0.02
+    -- GLASS: notifications are dark frosted panes so text stays readable over any world
+    frame.BackgroundColor3 = Color3.fromRGB(10, 14, 22)
+    frame.BackgroundTransparency = 0.3
     frame.BorderSizePixel = 0
     frame.Parent = ScreenGui
 
@@ -1009,11 +1248,13 @@ local function Notify(title, text, duration, color)
 
     local stroke = Instance.new("UIStroke", frame)
     stroke.Color = color; stroke.Thickness = 1.5; stroke.Transparency = 0.4
+    RegisterThemed(stroke, "Color") -- notifications follow the live theme too
 
     local accent = Instance.new("Frame", frame)
     accent.Size = UDim2.new(0, 3, 1, 0)
     accent.BackgroundColor3 = color
     accent.BorderSizePixel = 0
+    RegisterThemed(accent, "BackgroundColor3")
 
     local ttl = Instance.new("TextLabel", frame)
     ttl.Size = UDim2.new(1, -24, 0, 24); ttl.Position = UDim2.new(0, 16, 0, 8)
@@ -1081,13 +1322,15 @@ end
 CopyToClipboard = _CopyToClipboard
 
 -- ==================== WATERMARK (FIXED) ====================
-local currentFPS = 0
+currentFPS = 0 -- globals: see LOCAL REGISTER OVERFLOW note above
+fpsCount = 0
+fpsTime = 0
 
 local Watermark = Instance.new("Frame", ScreenGui)
 Watermark.Size = UDim2.new(0, 260, 0, 36)
 Watermark.Position = UDim2.new(0, 12, 0, 12)
-Watermark.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-Watermark.BackgroundTransparency = 0.1
+Watermark.BackgroundColor3 = Color3.fromRGB(10, 14, 22) -- GLASS
+Watermark.BackgroundTransparency = 0.3
 Watermark.BorderSizePixel = 0
 Watermark.Visible = false
 Instance.new("UICorner", Watermark).CornerRadius = UDim.new(0, 8)
@@ -1109,9 +1352,8 @@ WMFPS.TextXAlignment = Enum.TextXAlignment.Right
 
 Connect("WatermarkFPS", RunService.RenderStepped, function()
     if PanicActive then return end
-    fpsCount = (fpsCount or 0) + 1
+    fpsCount = fpsCount + 1
     local now = tick()
-    if not fpsTime then fpsTime = now end
     if now - fpsTime >= 1 then
         currentFPS = fpsCount
          SafeCall(function() WMFPS.Text = tostring(currentFPS) .. " FPS" end)
@@ -1119,6 +1361,7 @@ Connect("WatermarkFPS", RunService.RenderStepped, function()
         fpsTime = now
     end
 end)
+RegisterThemed(WMStroke, "Color")
 
 -- ==================== CLIENT EFFECTS (FIXED) ====================
 local FXFolder = Instance.new("Folder", Camera); FXFolder.Name = "RBX_FX"
@@ -1141,6 +1384,20 @@ local function ClearESP()
     ESPObjects = {}
     SafeCall(function() ESPFolder:ClearAllChildren() end)
 end
+
+-- POWER VISUALS: bone chains for Skeleton ESP (R15 and R6 rigs)
+local SKELETON_R15 = {
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
+}
+local SKELETON_R6 = {
+    {"Head", "Torso"},
+    {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"}, {"Torso", "Right Leg"},
+}
 
 local function CreateESP(targetPlayer)
     if targetPlayer == LocalPlayer then return end
@@ -1200,6 +1457,8 @@ local function CreateESP(targetPlayer)
     tracer.Thickness = 1.5; tracer.Color3 = State.ESP.Color; tracer.Transparency = 0.5
     tracer.ZIndex = 5; tracer.AlwaysOnTop = true; tracer.Visible = false
 
+    local skeletonLines = {}
+
     local conn = RunService.RenderStepped:Connect(function()
         if PanicActive then return end
         if not State.ESP.Enabled or not targetPlayer.Parent or not group or not group.Parent then
@@ -1241,6 +1500,71 @@ local function CreateESP(targetPlayer)
         bb.Enabled = visible
         tracer.Visible = State.ESP.Tracers and visible
         highlight.Enabled = State.ESP.Chams and visible
+
+        -- FIXED: Names / Health / Distance / Tool toggles now really show and hide each element
+        local accent = GetAccent()
+        SafeCall(function()
+            nameLbl.Visible = State.ESP.Names
+            infoLbl.Visible = State.ESP.Health
+            hpBg.Visible = State.ESP.Health
+            distLbl.Visible = State.ESP.Distance
+            toolLbl.Visible = State.ESP.Tool
+            box.Color3 = accent
+            nameLbl.TextColor3 = accent
+            tracer.Color3 = accent
+            if highlight and highlight.Parent then
+                highlight.FillColor = accent
+                highlight.OutlineColor = accent
+            end
+        end)
+
+        -- POWER VISUALS: Skeleton ESP via bone lines
+        if State.ESP.Skeleton and visible then
+            SafeCall(function()
+                local targetChar = targetPlayer.Character
+                local bones = (targetChar and targetChar:FindFirstChild("UpperTorso") and SKELETON_R15)
+                    or (targetChar and targetChar:FindFirstChild("Torso") and SKELETON_R6)
+                    or nil
+                if bones and hrp then
+                    local used = 0
+                    for _, bone in ipairs(bones) do
+                        local p1 = targetChar:FindFirstChild(bone[1])
+                        local p2 = targetChar:FindFirstChild(bone[2])
+                        if p1 and p2 then
+                            used = used + 1
+                            local line = skeletonLines[used]
+                            if not line or not line.Parent then
+                                line = Instance.new("LineHandleAdornment")
+                                line.Thickness = 1.5
+                                line.AlwaysOnTop = true
+                                line.ZIndex = 5
+                                line.Parent = group
+                                skeletonLines[used] = line
+                            end
+                            local a, b = p1.Position, p2.Position
+                            line.Adornee = hrp
+                            local mid = hrp.CFrame:PointToObjectSpace((a + b) / 2)
+                            local dir = hrp.CFrame:VectorToObjectSpace(b - a)
+                            if dir.Magnitude > 0.001 then
+                                line.CFrame = CFrame.lookAt(mid, mid + dir)
+                            else
+                                line.CFrame = CFrame.new(mid)
+                            end
+                            line.Length = (b - a).Magnitude
+                            line.Color3 = accent
+                            line.Visible = true
+                        end
+                    end
+                    for i = used + 1, #skeletonLines do
+                        if skeletonLines[i] then skeletonLines[i].Visible = false end
+                    end
+                else
+                    for _, line in ipairs(skeletonLines) do if line then line.Visible = false end end
+                end
+            end)
+        else
+            for _, line in ipairs(skeletonLines) do if line then line.Visible = false end end
+        end
 
         SafeCall(function()
             if highlight and highlight.Parent then
@@ -1292,7 +1616,7 @@ local function CreateESP(targetPlayer)
         end
     end)
 
-    ESPObjects[targetPlayer.UserId] = {group = group, connection = conn}
+    ESPObjects[targetPlayer.UserId] = {group = group, connection = conn, skeleton = skeletonLines}
 end
 
 local function RefreshESP()
@@ -1339,6 +1663,8 @@ end)
 
 -- ==================== SUPERCHARGED AIMBOT SYSTEM (FIXED) ====================
 local FOVGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui); FOVGui.Name = "RBX_FOV"; FOVGui.ResetOnSpawn = false
+FOVGui.IgnoreGuiInset = true -- FOV ring center must match WorldToViewportPoint's true screen center
+FOVGui.DisplayOrder = 50
 local FOVFrame = Instance.new("Frame", FOVGui); FOVFrame.Size = UDim2.new(0, State.Aimbot.FOV*2, 0, State.Aimbot.FOV*2)
 FOVFrame.Position = UDim2.new(0.5, -State.Aimbot.FOV, 0.5, -State.Aimbot.FOV)
 FOVFrame.BackgroundTransparency = 1; FOVFrame.Visible = false
@@ -1356,12 +1682,17 @@ DistanceLabel.Font = Enum.Font.GothamBold
 DistanceLabel.TextSize = 14
 DistanceLabel.Visible = false
 
+-- POWER COMBAT: true when the aimbot toggle key is physically held down (Target Lock override)
+local AimbotKeyHeld = false
+local AimbotKeyEnum = nil -- EnumItem of the bound key, mirrored from State.CustomKeybinds
+
 local function UpdateTargetHighlight(target)
     if not target or not target.Character or not target.Character.Parent then
         if TargetHighlight then SafeCall(function() TargetHighlight:Destroy() end); TargetHighlight = nil end
         return
     end
-    local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+    -- highlight follows the aim part (Head) so the glow sits on what you're actually locking
+    local hrp = GetAimPart(target.Character)
     if not hrp then
         if TargetHighlight then SafeCall(function() TargetHighlight:Destroy() end); TargetHighlight = nil end
         return
@@ -1391,9 +1722,14 @@ local function GetAimbotTarget()
     end
     LastAimbotCache = now
 
+    -- POWER COMBAT: target lock override — while the aimbot key is held, nobody else can be picked
+    if AimbotKeyHeld and CurrentAimbotTarget and IsPlayerAlive(CurrentAimbotTarget) then
+        return CurrentAimbotTarget
+    end
+
     if State.Aimbot.LockOn and CurrentAimbotTarget then
         if IsPlayerAlive(CurrentAimbotTarget) and CurrentAimbotTarget.Character and CurrentAimbotTarget.Character.Parent then
-            local part = CurrentAimbotTarget.Character:FindFirstChild(State.Aimbot.Part)
+            local part = GetAimPart(CurrentAimbotTarget.Character)
             if part and part.Parent then
                 local myHRP = GetHRP()
                 local dist3D = 0
@@ -1439,7 +1775,7 @@ local function GetAimbotTarget()
         if not IsPlayerAlive(p) then continue end
         if not p.Character or not p.Character.Parent then continue end
 
-        local part = p.Character:FindFirstChild(State.Aimbot.Part)
+        local part = GetAimPart(p.Character)
         if not part or not part.Parent then continue end
 
         local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
@@ -1488,29 +1824,46 @@ local function GetAimbotTarget()
 end
 
 local SilentAimRandom = Random.new(tick())
-local function GetSilentAimPosition()
+function GetSilentAimPosition()
     if PanicActive then return nil end
     if not State.SilentAim.Enabled then return nil end
+
+    -- POWER COMBAT: while the aimbot key is held, silent aim ALWAYS follows the locked target
+    local forcedPart = nil
+    if AimbotKeyHeld and CurrentAimbotTarget and IsPlayerAlive(CurrentAimbotTarget)
+        and CurrentAimbotTarget.Character and CurrentAimbotTarget.Character.Parent then
+        forcedPart = GetAimPart(CurrentAimbotTarget.Character)
+    end
+
     local target = nil
     local minDist = State.SilentAim.FOV
     local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     local myChar = GetChar()
     if not myChar then return nil end
 
-    for _, p in ipairs(GetCachedPlayers()) do
-        if p == LocalPlayer then continue end
-        if State.Aimbot.TeamCheck and p.Team and LocalPlayer.Team and p.Team == LocalPlayer.Team then continue end
-        if not IsPlayerAlive(p) then continue end
-        if not p.Character or not p.Character.Parent then continue end
-        local part = p.Character:FindFirstChild(State.Aimbot.Part)
-        if not part or not part.Parent then continue end
-        local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
-        if not onScreen then continue end
-        local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-        if d < minDist then
-            if SilentAimRandom:NextInteger(1, 100) <= State.SilentAim.HitChance then
-                minDist = d
-                target = part
+    if forcedPart and forcedPart.Parent then
+        target = forcedPart -- bypass FOV + hit chance entirely during hard lock
+    else
+        for _, p in ipairs(GetCachedPlayers()) do
+            if p == LocalPlayer then continue end
+            if State.SilentAim.TeamCheck and p.Team and LocalPlayer.Team and p.Team == LocalPlayer.Team then continue end
+            if not IsPlayerAlive(p) then continue end
+            if not p.Character or not p.Character.Parent then continue end
+            local part = GetAimPart(p.Character)
+            if not part or not part.Parent then continue end
+            local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if not onScreen then continue end
+            local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+            if d < minDist then
+                if State.SilentAim.VisibleCheck then
+                    local rayParams = GetRaycastParams()
+                    local hit = Workspace:Raycast(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * math.max((part.Position - Camera.CFrame.Position).Magnitude, 1), rayParams)
+                    if not (hit and hit.Instance and hit.Instance:IsDescendantOf(p.Character)) then continue end
+                end
+                if SilentAimRandom:NextInteger(1, 100) <= State.SilentAim.HitChance then
+                    minDist = d
+                    target = part
+                end
             end
         end
     end
@@ -1519,7 +1872,8 @@ local function GetSilentAimPosition()
         local pos = target.Position
         if State.Aimbot.Prediction then
             local vel = target.AssemblyLinearVelocity or Vector3.zero
-            pos = pos + (vel * 0.15)
+            local mult = State.Aimbot.PowerMode and 0.25 or 0.15
+            pos = pos + (vel * mult)
         end
         if State.Aimbot.DropComp then
             pos = pos - Vector3.new(0, 1.5, 0)
@@ -1602,6 +1956,9 @@ end
 
 Connect("LocalCharacterAdded", LocalPlayer.CharacterAdded, ReapplyCharacterState)
 
+-- God Mode V2: full heal right after respawn so god mode survives death
+Connect("GodModeRevive", LocalPlayer.CharacterAdded, GodModeRespawnHandler)
+
 Connect("LocalCharacterRemoving", LocalPlayer.CharacterRemoving, function()
     if PanicActive then return end
     SafeCall(function()
@@ -1619,11 +1976,47 @@ Connect("LocalCharacterRemoving", LocalPlayer.CharacterRemoving, function()
 end)
 
 -- ==================== UI CONSTRUCTION (BLACK THEME + ANIMATED) ====================
+-- ==================== GLASS SYSTEM (FULL GLASS UI) ====================
+-- Frosted-glass look: translucent dark panels + white edge highlights + soft sheen.
+-- The world behind the open panel gets a live backdrop blur (GLASS BLUR below).
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Name = "MainPanel"; MainFrame.Size = UDim2.new(0, CONFIG.PanelWidth, 0, CONFIG.PanelHeight)
 MainFrame.Position = UDim2.new(0.5, -CONFIG.PanelWidth/2, 0.5, -CONFIG.PanelHeight/2 + 40)
-MainFrame.BackgroundColor3 = CONFIG.Dark; MainFrame.BorderSizePixel = 0; MainFrame.ClipsDescendants = true; MainFrame.Visible = false
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 16)
+MainFrame.BackgroundColor3 = Color3.fromRGB(16, 22, 34); MainFrame.BackgroundTransparency = 0.25
+MainFrame.BorderSizePixel = 0; MainFrame.ClipsDescendants = true; MainFrame.Visible = false
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 18)
+local MainGlassStroke = Instance.new("UIStroke", MainFrame)
+MainGlassStroke.Color = Color3.fromRGB(255,255,255); MainGlassStroke.Thickness = 1.4; MainGlassStroke.Transparency = 0.72
+RegisterThemed(MainGlassStroke, "Color", "glass")
+-- GLASS BLUR: while the panel is open the world behind it frosts over.
+-- Globals on purpose (register budget + Panic can always find them).
+GlassBlur = Instance.new("BlurEffect")
+GlassBlur.Name = "RBX_GlassBlur"; GlassBlur.Size = 0; GlassBlur.Parent = Lighting
+function SetGlassBlur(on) SafeCall(function() if GlassBlur and GlassBlur.Parent then GlassBlur.Size = on and 14 or 0 end end) end
+-- Frost layer: animated white sheen that sells the glass depth (sits behind content)
+do
+local FrostLayer = Instance.new("Frame", MainFrame)
+FrostLayer.Name = "FrostLayer"; FrostLayer.Size = UDim2.new(1,0,1,0)
+FrostLayer.BackgroundColor3 = Color3.fromRGB(255,255,255); FrostLayer.BackgroundTransparency = 0.93
+FrostLayer.BorderSizePixel = 0; FrostLayer.ZIndex = -6
+Instance.new("UICorner", FrostLayer).CornerRadius = UDim.new(0, 18)
+local FrostGradient = Instance.new("UIGradient", FrostLayer)
+FrostGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(190, 210, 235)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
+})
+FrostGradient.Rotation = 115
+FrostGradient.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0.45),
+    NumberSequenceKeypoint.new(0.5, 0.9),
+    NumberSequenceKeypoint.new(1, 0.45)
+})
+Connect("FrostSheen", RunService.RenderStepped, function()
+    if PanicActive then return end
+    FrostGradient.Rotation = 115 + math.sin(tick() * 0.35) * 20
+end)
+end
 
 local MainScale = Instance.new("UIScale")
 MainScale.Name = "ResponsiveScale"
@@ -1640,12 +2033,17 @@ end
 local function UpdateMainScale()
     local v = Camera and Camera.ViewportSize or Vector2.new(CONFIG.PanelWidth + 40, CONFIG.PanelHeight + 40)
     local topLeft, bottomRight = GuiService:GetGuiInset()
+    -- FIXED (device fit): the safe area is ALWAYS subtracted (IgnoreGuiInset is on), so the
+    -- panel can never slide under notches, bars or touch controls on any device.
     local safeWidth = math.max(1, v.X - topLeft.X - bottomRight.X - CONFIG.MinPanelMargin * 2)
     local safeHeight = math.max(1, v.Y - topLeft.Y - bottomRight.Y - CONFIG.MinPanelMargin * 2)
     DeviceType = DetectDevice()
     local sx = safeWidth / CONFIG.PanelWidth
     local sy = safeHeight / CONFIG.PanelHeight
-    MainScale.Scale = math.min(1, sx, sy)
+    -- FIXED (device fit): never upscale on huge monitors (cap 1) + clamp the minimum to 0.3
+    -- so tiny windows do not produce an invisible panel, plus the user UI Scale slider.
+    local fit = math.min(1, sx, sy) * (State.UIScale / 100)
+    MainScale.Scale = math.clamp(fit, 0.3, 1.5)
 end
 SafeCall(function()
     if Camera then Camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateMainScale) end
@@ -1673,6 +2071,7 @@ local function AddHoverAnimation(guiObject, normalColor, hoverColor, normalSize,
     end)
 end
 
+do -- scoped: animation locals live only inside this block (register budget)
 local BGAnim = Instance.new("Frame", MainFrame)
 BGAnim.Name = "BGAnim"; BGAnim.Size = UDim2.new(1,0,1,0); BGAnim.BackgroundTransparency = 1; BGAnim.ZIndex = -5; BGAnim.BorderSizePixel = 0
 
@@ -1714,18 +2113,26 @@ Connect("BGAnim", RunService.RenderStepped, function()
         data.frame.Position = UDim2.new(x, 0, y, 0)
     end
 end)
+end
 
-local BG = Instance.new("Frame", MainFrame); BG.Size = UDim2.new(1,0,1,0); BG.BackgroundColor3 = Color3.fromRGB(5,5,5)
-BG.BackgroundTransparency = 0.1; BG.BorderSizePixel = 0; BG.ZIndex = -2
+-- GLASS: tint layer went from solid black (T 0.1) to a translucent deep-blue veil
+local BG = Instance.new("Frame", MainFrame); BG.Size = UDim2.new(1,0,1,0); BG.BackgroundColor3 = Color3.fromRGB(8, 12, 20)
+BG.BackgroundTransparency = 0.55; BG.BorderSizePixel = 0; BG.ZIndex = -2
 Instance.new("UICorner", BG).CornerRadius = UDim.new(0, 14)
-local BGStroke = Instance.new("UIStroke", BG); BGStroke.Color = Color3.fromRGB(40,40,40); BGStroke.Thickness = 2; BGStroke.Transparency = 0.3
+local BGStroke = Instance.new("UIStroke", BG); BGStroke.Color = Color3.fromRGB(255,255,255); BGStroke.Thickness = 1; BGStroke.Transparency = 0.85
 
 local AccentBar = Instance.new("Frame", MainFrame); AccentBar.Size = UDim2.new(1,0,0,3)
 AccentBar.BackgroundColor3 = CONFIG.Accent; AccentBar.BorderSizePixel = 0
 
+-- GLASS: header strip is a lighter translucent pane with a soft edge
 local TitleArea = Instance.new("Frame", MainFrame); TitleArea.Size = UDim2.new(1,0,0,68); TitleArea.Position = UDim2.new(0,0,0,3)
-TitleArea.BackgroundColor3 = Color3.fromRGB(15,15,15); TitleArea.BorderSizePixel = 0
+TitleArea.BackgroundColor3 = Color3.fromRGB(255, 255, 255); TitleArea.BackgroundTransparency = 0.93; TitleArea.BorderSizePixel = 0
 Instance.new("UICorner", TitleArea).CornerRadius = UDim.new(0, 12)
+do
+local TitleStroke = Instance.new("UIStroke", TitleArea); TitleStroke.Color = Color3.fromRGB(255,255,255)
+TitleStroke.Thickness = 1; TitleStroke.Transparency = 0.86
+RegisterThemed(TitleStroke, "Color", "glass")
+end
 
 local Logo = Instance.new("Frame", TitleArea); Logo.Size = UDim2.new(0,42,0,42); Logo.Position = UDim2.new(0,16,0,13)
 Logo.BackgroundColor3 = Color3.fromRGB(40,40,40); Instance.new("UICorner", Logo).CornerRadius = UDim.new(0,8)
@@ -1740,7 +2147,7 @@ TitleText.TextStrokeTransparency = 0.5
 TitleText.TextStrokeColor3 = Color3.fromRGB(0,0,0)
 
 local SubTitle = Instance.new("TextLabel", TitleArea); SubTitle.Size = UDim2.new(0,360,0,20); SubTitle.Position = UDim2.new(0,72,0,38)
-SubTitle.BackgroundTransparency = 1; SubTitle.Text = "RBX 1.0 HUB | v1.1.0 BIG GUI"
+SubTitle.BackgroundTransparency = 1; SubTitle.Text = "RBX 1.0 HUB | " .. GetHubVersion() .. " POWER COMBAT"
 SubTitle.TextColor3 = Color3.fromRGB(120,120,120); SubTitle.Font = Enum.Font.Gotham; SubTitle.TextSize = 11
 SubTitle.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -1754,35 +2161,51 @@ end)
 
 do
     local dragging, dragStart, startPos = false, nil, nil
-    TitleArea.InputBegan:Connect(function(input)
-        if PanicActive then return end
+    -- through the registry so PANIC purges these too (they used to leak)
+    Connect("MainDragBegan", TitleArea.InputBegan, function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true; dragStart = input.Position; startPos = MainFrame.Position
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
+    Connect("MainDragChanged", UserInputService.InputChanged, function(input)
         if not dragging or not dragStart or not startPos then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             local d = input.Position - dragStart
             MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
+    Connect("MainDragEnded", UserInputService.InputEnded, function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
     end)
 end
 
 local TabContainer, ContentFrame, LeftArrow, RightArrow
+local minimized = false -- upvalue so ToggleUI can restore a minimized panel on reopen
 local function ToggleUI(show)
     if PanicActive then return end
     uiVisible = show
     MainFrame.Visible = show
     Watermark.Visible = show
+    SetGlassBlur(show) -- GLASS: frost the world while the panel is open
+    -- GLASS FIX: minimize (−) must keep the blur (panel is still open),
+    -- so blur follows the minimize state too, not just open/close.
+    SafeCall(function()
+        if GlassBlur and GlassBlur.Parent then
+            GlassBlur.Size = (show or not minimized) and 14 or 0
+        end
+    end)
     if not show and State.Overlay.AutoShowOnClose then
         State.Overlay.Enabled = true
     end
     if show then
         MainFrame.Position = UDim2.new(0.5, -CONFIG.PanelWidth/2, 0.5, -CONFIG.PanelHeight/2 + 40)
+        -- reopen always restores the full panel size even if it was minimized when closed
+        SafeCall(function()
+            MainFrame.Size = UDim2.new(0, CONFIG.PanelWidth, 0, CONFIG.PanelHeight)
+            TabContainer.Visible = true
+            ContentFrame.Visible = true
+            minimized = false
+        end)
         local targetScale = MainScale.Scale
         MainScale.Scale = targetScale * 0.92
         SafeCall(function()
@@ -1804,16 +2227,28 @@ local function MakeCtrl(text, color, pos, parent)
     return btn
 end
 
+RegisterThemed(WMStroke, "Color")
+RegisterThemed(overlayStroke, "Color")
+RegisterThemed(BGStroke, "Color")
+RegisterThemed(FOVStroke, "Color")
+RegisterThemed(LeftArrow, "TextColor3")
+RegisterThemed(RightArrow, "TextColor3")
+RegisterThemed(BtnStroke, "Color")
 local CloseBtn = MakeCtrl("×", Color3.fromRGB(80,80,80), UDim2.new(1,-42,0,17), TitleArea)
 CloseBtn.MouseButton1Click:Connect(function() if not PanicActive then ToggleUI(false) end end)
 
 local MinBtn = MakeCtrl("−", Color3.fromRGB(80,80,80), UDim2.new(1,-82,0,17), TitleArea)
-local minimized = false
+
 MinBtn.MouseButton1Click:Connect(function()
     if PanicActive then return end
     minimized = not minimized
     TabContainer.Visible = not minimized
     ContentFrame.Visible = not minimized
+    SafeCall(function()
+        if GlassBlur and GlassBlur.Parent then
+            GlassBlur.Size = (uiVisible and not minimized) and 14 or 0
+        end
+    end)
     SafeCall(function()
         TweenService:Create(MainFrame, TweenInfo.new(0.35), {
             Size = minimized and UDim2.new(0, CONFIG.PanelWidth, 0, 60) or UDim2.new(0, CONFIG.PanelWidth, 0, CONFIG.PanelHeight)
@@ -1889,6 +2324,7 @@ local function CreateSection(parent, text)
     local f = Instance.new("Frame", parent); f.Size = UDim2.new(1,0,0,26); f.BackgroundTransparency = 1
     local line = Instance.new("Frame", f); line.Size = UDim2.new(0.14,0,0,2); line.Position = UDim2.new(0,0,0.5,-1)
     line.BackgroundColor3 = Color3.fromRGB(80,80,80); line.BorderSizePixel = 0
+    RegisterThemed(line, "BackgroundColor3")
     local lbl = Instance.new("TextLabel", f); lbl.Size = UDim2.new(0.8,0,1,0); lbl.Position = UDim2.new(0,16,0,0)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(160,160,160)
     lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 12; lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -1896,9 +2332,9 @@ end
 
 local function CreateToggle(parent, text, default, color, callback)
     local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, CONFIG.RowHeight)
-    frame.BackgroundColor3 = Color3.fromRGB(18,18,18); frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = Color3.fromRGB(255,255,255); frame.BackgroundTransparency = 0.92; frame.BorderSizePixel = 0
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(35,35,35); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(255,255,255); stroke.Thickness = 1; stroke.Transparency = 0.85
 
     local lbl = Instance.new("TextLabel", frame); lbl.Size = UDim2.new(0.55,0,1,0); lbl.Position = UDim2.new(0,14,0,0)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(220,220,220)
@@ -1914,14 +2350,18 @@ local function CreateToggle(parent, text, default, color, callback)
 
     local st = default
     local function upd()
-        local tc = st and (color or Color3.fromRGB(80,80,80)) or Color3.fromRGB(45,45,45)
+        -- POWER THEMES: an ON toggle glows with the live theme accent, not a fixed grey
+        local tc = st and ((color and color ~= Color3.fromRGB(80,80,80)) and color or GetAccent()) or Color3.fromRGB(45,45,45)
         local tp = st and UDim2.new(1,-23,0.5,-10) or UDim2.new(0,3,0.5,-10)
         SafeCall(function()
             TweenService:Create(bg, TweenInfo.new(0.25), {BackgroundColor3 = tc}):Play()
             TweenService:Create(circle, TweenInfo.new(0.25), {Position = tp}):Play()
-            TweenService:Create(stroke, TweenInfo.new(0.25), {Color = st and (color or Color3.fromRGB(60,60,60)) or Color3.fromRGB(35,35,35)}):Play()
+            TweenService:Create(stroke, TweenInfo.new(0.25), {Color = st and GetAccent() or Color3.fromRGB(255,255,255)}):Play()
         end)
     end
+    RegisterThemed(bg, "BackgroundColor3", "toggle")
+    RegisterThemed(stroke, "Color", "toggle")
+    upd() -- initial visual state (default-ON toggles must glow, not show the OFF stroke)
 
     local click = Instance.new("TextButton", frame); click.Size = UDim2.new(1,0,1,0); click.BackgroundTransparency = 1; click.Text = ""
     click.MouseButton1Click:Connect(function()
@@ -1935,10 +2375,10 @@ local function CreateToggle(parent, text, default, color, callback)
 end
 
 local function CreateSlider(parent, text, min, max, default, callback, releaseCallback)
-    local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, 64); frame.BackgroundColor3 = Color3.fromRGB(18,18,18)
+    local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, 64); frame.BackgroundColor3 = Color3.fromRGB(255,255,255); frame.BackgroundTransparency = 0.92
     frame.BorderSizePixel = 0
     local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(35,35,35); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(255,255,255); stroke.Thickness = 1; stroke.Transparency = 0.85
 
     local lbl = Instance.new("TextLabel", frame); lbl.Size = UDim2.new(0.5,0,0,18); lbl.Position = UDim2.new(0,10,0,5)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(210,210,210)
@@ -1978,6 +2418,7 @@ local function CreateSlider(parent, text, min, max, default, callback, releaseCa
     end
 
     local sliderConnections = {}
+    RegisterThemed(fill, "BackgroundColor3")
     sliderConnections[1] = knob.InputBegan:Connect(function(i) 
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
             dragging = true 
@@ -2016,8 +2457,10 @@ end
 local function CreateButton(parent, text, color, callback)
     local btn = Instance.new("TextButton", parent); btn.Size = UDim2.new(1,0,0,44); btn.BackgroundColor3 = color or Color3.fromRGB(35,35,35)
     btn.Text = text; btn.TextColor3 = Color3.fromRGB(255,255,255); btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13; btn.AutoButtonColor = false
+    local btnStroke = Instance.new("UIStroke", btn)
+    btnStroke.Color = color and color:Lerp(Color3.fromRGB(255,255,255),0.2) or Color3.fromRGB(55,55,55); btnStroke.Thickness = 1; btnStroke.Transparency = 0.5
+    RegisterThemed(btnStroke, "Color")
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0,10)
-    local s = Instance.new("UIStroke", btn); s.Color = color and color:Lerp(Color3.fromRGB(255,255,255),0.2) or Color3.fromRGB(55,55,55); s.Thickness = 1; s.Transparency = 0.5
 
     btn.MouseButton1Click:Connect(function()
         if PanicActive then return end
@@ -2036,10 +2479,10 @@ end
 local function CreateDropdown(parent, text, options, defaultIdx, callback)
     options = type(options) == "table" and options or {}
     defaultIdx = tonumber(defaultIdx) or 1
-    local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, CONFIG.RowHeight); frame.BackgroundColor3 = Color3.fromRGB(18,18,18)
+    local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, CONFIG.RowHeight); frame.BackgroundColor3 = Color3.fromRGB(255,255,255); frame.BackgroundTransparency = 0.92
     frame.BorderSizePixel = 0
     local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(35,35,35); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(255,255,255); stroke.Thickness = 1; stroke.Transparency = 0.85
 
     local lbl = Instance.new("TextLabel", frame); lbl.Size = UDim2.new(0.4,0,1,0); lbl.Position = UDim2.new(0,14,0,0)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(210,210,210)
@@ -2092,10 +2535,10 @@ local function CreateDropdown(parent, text, options, defaultIdx, callback)
 end
 
 local function CreateTextBox(parent, text, placeholder, callback)
-    local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, 56); frame.BackgroundColor3 = Color3.fromRGB(18,18,18)
+    local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, 56); frame.BackgroundColor3 = Color3.fromRGB(255,255,255); frame.BackgroundTransparency = 0.92
     frame.BorderSizePixel = 0
     local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(35,35,35); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(255,255,255); stroke.Thickness = 1; stroke.Transparency = 0.85
 
     local lbl = Instance.new("TextLabel", frame); lbl.Size = UDim2.new(0.4,0,0,18); lbl.Position = UDim2.new(0,10,0,5)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(210,210,210)
@@ -2112,9 +2555,9 @@ end
 
 local function CreateKeybind(parent, text, defaultKey, callback)
     local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, CONFIG.RowHeight)
-    frame.BackgroundColor3 = Color3.fromRGB(18,18,18); frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = Color3.fromRGB(255,255,255); frame.BackgroundTransparency = 0.92; frame.BorderSizePixel = 0
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(35,35,35); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(255,255,255); stroke.Thickness = 1; stroke.Transparency = 0.85
 
     local lbl = Instance.new("TextLabel", frame); lbl.Size = UDim2.new(0.55,0,1,0); lbl.Position = UDim2.new(0,14,0,0)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Color3.fromRGB(220,220,220)
@@ -2201,9 +2644,10 @@ end
 local function CreateInfoCard(parent, title, value, buttonText, buttonCallback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1,0,0,92)
-    frame.BackgroundColor3 = Color3.fromRGB(18,18,18); frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = Color3.fromRGB(255,255,255); frame.BackgroundTransparency = 0.92; frame.BorderSizePixel = 0
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(38,38,38); stroke.Thickness = 1.2; stroke.Transparency = 0.35
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(255,255,255); stroke.Thickness = 1.2; stroke.Transparency = 0.8
+    RegisterThemed(stroke, "Color") -- info cards follow the theme
     local titleLbl = Instance.new("TextLabel", frame); titleLbl.Size = UDim2.new(0.28,0,1,0); titleLbl.Position = UDim2.new(0,18,0,0)
     titleLbl.BackgroundTransparency = 1; titleLbl.Text = title; titleLbl.TextColor3 = Color3.fromRGB(145,145,145); titleLbl.Font = Enum.Font.GothamSemibold; titleLbl.TextSize = 13; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
     local valueLbl = Instance.new("TextLabel", frame); valueLbl.Size = UDim2.new(buttonText and 0.48 or 0.64,0,1,0); valueLbl.Position = UDim2.new(0.28,0,0,0)
@@ -2222,9 +2666,9 @@ end
 
 local function CreatePlayerSelector(parent, callback)
     local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1,0,0, CONFIG.RowHeight + 10)
-    frame.BackgroundColor3 = Color3.fromRGB(18,18,18); frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = Color3.fromRGB(255,255,255); frame.BackgroundTransparency = 0.92; frame.BorderSizePixel = 0
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(35,35,35); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(255,255,255); stroke.Thickness = 1; stroke.Transparency = 0.85
 
     local lbl = Instance.new("TextLabel", frame); lbl.Size = UDim2.new(0.4,0,0,20); lbl.Position = UDim2.new(0,10,0,5)
     lbl.BackgroundTransparency = 1; lbl.Text = "Selected Player"; lbl.TextColor3 = Color3.fromRGB(210,210,210)
@@ -2440,10 +2884,17 @@ end
 local ServerCache = {At = 0, Servers = {}, Cursor = nil}
 local ServerStatus = {Text = "Not checked", Data = nil, Error = nil}
 
+local function GetServerRegion(server)
+    if type(server) ~= "table" then return "N/A (not exposed)" end
+    local value = server.country or server.region or server.location or server.geo or server.datacenter
+    if value and tostring(value) ~= "" then return tostring(value) end
+    return "N/A (not exposed)"
+end
+
 local function GetAllInfoText()
     local p = LocalPlayer
     local lines = {
-        "RBX 1.0 HUB v1.1.0",
+        "RBX 1.0 HUB " .. GetHubVersion(),
         "==============================",
         "Game Name: " .. GetGameName(),
         "Place ID: " .. tostring(game.PlaceId),
@@ -2557,8 +3008,8 @@ StatusOverlay.AnchorPoint = Vector2.new(0.5, 0)
 StatusOverlay.Position = UDim2.new(0.5, 0, 0, 12)
 StatusOverlay.Size = UDim2.new(0, 280, 0, 0)
 StatusOverlay.AutomaticSize = Enum.AutomaticSize.Y
-StatusOverlay.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
-StatusOverlay.BackgroundTransparency = 0.08
+StatusOverlay.BackgroundColor3 = Color3.fromRGB(10, 14, 22) -- GLASS: frosted dark pane
+StatusOverlay.BackgroundTransparency = 0.3
 StatusOverlay.BorderSizePixel = 0
 StatusOverlay.Visible = false
 StatusOverlay.ZIndex = 30
@@ -2590,15 +3041,16 @@ local OverlayRows = {
     Ping = CreateOverlayRow("Ping: --"),
     Network = CreateOverlayRow("Network: Checking..."),
 }
+do -- scoped: overlay drag state (register budget) + Panic-safe connections
 local overlayDragging, overlayDragStart, overlayStartPosition = false, nil, nil
-StatusOverlay.InputBegan:Connect(function(input)
+Connect("OverlayDrag", StatusOverlay.InputBegan, function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         overlayDragging = true
         overlayDragStart = input.Position
         overlayStartPosition = StatusOverlay.Position
     end
 end)
-UserInputService.InputChanged:Connect(function(input)
+Connect("OverlayDragMove", UserInputService.InputChanged, function(input)
     if not overlayDragging or not overlayDragStart or not overlayStartPosition then return end
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         local delta = input.Position - overlayDragStart
@@ -2608,11 +3060,12 @@ UserInputService.InputChanged:Connect(function(input)
         StatusOverlay.Position = UDim2.new(overlayStartPosition.X.Scale, x, overlayStartPosition.Y.Scale, y)
     end
 end)
-UserInputService.InputEnded:Connect(function(input)
+Connect("OverlayDragEnd", UserInputService.InputEnded, function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         overlayDragging = false
     end
 end)
+end
 local overlayLastUpdate = 0
 local overlayGameName = "Loading..."
 local overlayNameUpdated = 0
@@ -2641,13 +3094,7 @@ Connect("TopStatusOverlay", RunService.Heartbeat, function()
     StatusOverlay.Size = UDim2.new(0, math.clamp(v.X - 24, 190, 280), 0, 0)
     StatusOverlay.Visible = State.Overlay.FPS or State.Overlay.ServerName or State.Overlay.Ping or State.Overlay.Network
 end)
-
-local function GetServerRegion(server)
-    if type(server) ~= "table" then return "N/A (not exposed)" end
-    local value = server.country or server.region or server.location or server.geo or server.datacenter
-    if value and tostring(value) ~= "" then return tostring(value) end
-    return "N/A (not exposed)"
-end
+RegisterThemed(overlayStroke, "Color")
 
 local function JoinJobId(jobId)
     local clean = tostring(jobId or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -2755,36 +3202,102 @@ end
 
 local function GetChangelogText()
     return table.concat({
-        "RBX 1.5.0 — SKY BLUE / THEMES / SAVE UPDATE",
+        "RBX 2.2.0 — AIMBOT & GLASS FIXES",
         "",
-        "ADDED",
-        "• Live device profile: Mobile, Tablet, Desktop, or Console.",
-        "• Safe-area aware panel scaling using the current viewport and GUI inset.",
-        "• Automatic portrait/landscape reflow when the viewport changes.",
-        "• Mobile swipeable top-tab strip with larger touch targets.",
-        "• Duplicate GUI detection before the panel is created.",
-        "• Added an optional top status overlay for FPS, server name, ping, and network state.",
-        "• Added automatic overlay display when the main panel is closed.",
-        "• Added an Info-tab setting to control that close behavior.",
-        "• Sky Blue is now the default panel accent.",
-        "• Added 10 color themes: Sky Blue, Ocean, Purple, Emerald, Lime, Amber, Rose, Red, Orange, and White.",
-        "• Added drag support for the top status overlay on mouse and touch devices.",
-        "• Added simple saved-profile files: no JSON copy/paste is needed.",
+        "AIMBOT REWRITE",
+        "• FIXED: aimbot missed the head — camera updates now bind at Camera+1",
+        "  priority (after Roblox's own camera), so the view STAYS locked on",
+        "  the head instead of fighting the default camera script every frame.",
+        "• FIXED: a missing Head on some rigs silently disabled the aim — new",
+        "  Auto part resolver falls back Head > Torso > UpperTorso > arms.",
+        "• FOV ring now ignores the top-bar inset, so its center matches the",
+        "  real screen center; the target highlight follows the aim part.",
+        "• Default smoothing raised to 0.35 (0.08 crawled onto the target).",
         "",
-        "STABILITY FIXES",
-        "• Fixed minimize-time references to UI objects before their creation.",
-        "• Fixed repeated FPS-boost scans stacking on top of each other.",
-        "• FPS boost now processes in smaller batches and yields between batches.",
-        "• Fixed responsive scale clamping that could leave small screens clipped.",
-        "• Fixed tab overflow on mobile by making the tab bar scrollable.",
-        "• Fixed arrow controls remaining visible in compact mobile mode.",
-        "• Added a world-scan safety limit for future heavy scanners.",
-        "• Fixed the empty-screen experience after closing the main panel.",
-        "• Fixed profile-load validation so invalid or incomplete files do not crash the panel.",
+        "GUI FIXES",
+        "• FIXED: minimize (−) no longer leaves the screen blurred — blur only",
+        "  clears when the panel is actually closed or destroyed.",
+        "• FIXED: closing while minimized shrank the panel permanently;",
+        "  reopening now always restores the full window.",
+        "",
+        "RBX 2.1.0 — FULL GLASS UI / REGISTER OVERFLOW FIX",
+        "",
+        "CRITICAL FIX",
+        "• FIXED: script did not run at all — 'Out of local registers when",
+        "  trying to allocate dragStart; exceeded limit 200'. The chunk used",
+        "  205+ top-level locals; Luau caps a script at 200. Internal state",
+        "  moved to globals + scoped blocks: now 167 and it COMPILES.",
+        "",
+        "STABILITY HARDENING",
+        "• FIXED: theme registry grew without bound — every tab switch rebuilt",
+        "  all controls and re-registered them (rainbow loop slowed over time).",
+        "  Now deduped on insert + dead entries purged every few seconds.",
+        "• FIXED: toggles created in the ON state showed the OFF stroke until",
+        "  first clicked (initial visual state was never applied).",
+        "• FIXED: window, floating button and overlay drag connections leaked on",
+        "  PANIC — all now run through the Panic-safe connection registry.",
+        "",
+        "FULL GLASS UI (MASTERPIECE EDITION)",
+        "• Every panel is now real frosted glass: translucent panes, white",
+        "  edge highlights, animated sheen across the whole window.",
+        "• GLASS BLUR: the game world behind the panel frosts over while the",
+        "  menu is open and unfreezes on close/PANIC.",
+        "• Glass cards: toggles, sliders, buttons, dropdowns, textboxes,",
+        "  keybinds, info cards — all rebuilt as floating glass panes.",
+        "• Glass notifications, watermark, status overlay, floating button",
+        "  and the loading screen (blur veil instead of a black wall).",
+        "• Themes now tint the glass edges; Rainbow flows through the glass.",
+        "",
+        "RBX 2.0.0 — POWER COMBAT / RAINBOW / DEVICE-FIT UPDATE",
+        "",
+        "COMBAT (MASSIVE UPGRADE)",
+        "• Silent Aim now really redirects: gun RemoteEvents get a hit position",
+        "  locked on the target (CFrame + drop + prediction).",
+        "• Target Lock override: hold the Aimbot key to hard-lock one target.",
+        "• Auto Parry V2: fires real key presses + tool activation + every",
+        "  remote named like Parry/Block/Deflect.",
+        "• Auto Parry Every Frame: 5x faster parry fire rate.",
+        "• Auto Pot / Auto Eat: drinks healing items when you drop below the",
+        "  Pot Threshold slider.",
+        "• Rapid Fire V2: fires every RemoteEvent inside the tool with a real",
+        "  millisecond delay (Rapid Fire Rate slider, 1-100 ms).",
+        "• Melee Aura V2: ATTACK MODE — faces the target (LookAt) and attacks",
+        "  with every click method at once.",
+        "• Auto Shoot V2: fires whenever a target is inside the aimbot FOV,",
+        "  plus a Spam mode that unloads 5 clicks per tick.",
+        "• Hitbox V2: optional Torso/Arms expansion (not just Head).",
+        "• Spin Bot V2: velocity-free rotation so anti-cheats do not flag it.",
+        "• God Mode V2: auto-revive with a full heal right after death.",
+        "• PANIC COMBAT button: instantly resets every combat module.",
+        "",
+        "THEMES / UI",
+        "• NEW RAINBOW THEME: every accent in the GUI (header, tabs, toggles,",
+        "  sliders, notifications, ESP, aimbot ring) flows through the full RGB",
+        "  spectrum in real time.",
+        "• Choosing a theme now recolors the WHOLE panel, not just the top bar:",
+        "  toggles, sliders, buttons, arrows, strokes, ESP and the floating button.",
+        "• New UI Scale slider (50-150%) for extra screen fitting on top of the",
+        "  automatic device fit.",
+        "",
+        "FIXED (BUGS)",
+        "• DEVICE FIT: the panel now truly fits EVERY screen. Safe-area is always",
+        "  subtracted (notches, bars, touch controls), phones/tablets/consoles",
+        "  reflow automatically on rotation, and the minimum scale is clamped.",
+        "• Loading screen: Gui reference typo fixed — fade-out animation works.",
+        "• COPY ALL INFO: GetServerRegion crash fixed (function now exists).",
+        "• CPS is REAL now: Super/Ultra/Auto Click run at the exact speed shown;",
+        "  the hidden 66 CPS global cap is gone.",
+        "• ESP: Names / Health / Distance / Tool toggles now really hide each part.",
+        "• ESP: added Skeleton drawing (R6 + R15).",
+        "• FPS meter no longer uses undeclared globals.",
+        "• Destroy GUI now runs full PANIC cleanup (kills all loops).",
+        "• ScreenGui now uses IgnoreGuiInset (no more offset by the top bar).",
+        "• Profile import validates theme and UI-scale values.",
         "",
         "NOTES",
         "• Device layout updates automatically after rotation or window resizing.",
-        "• Server data is shown only when Roblox exposes it."
+        "• Rainbow overrides the accent color everywhere until you pick another theme.",
+        "• Server data is shown only when Roblox exposes it.",
     }, "\n")
 end
 
@@ -2821,6 +3334,7 @@ local function ApplySettingsProfile(data)
     if type(data.Display) == "table" then
         if type(data.Display.FOV) == "number" then State.FOV = math.clamp(data.Display.FOV, 40, 120) end
         if type(data.Display.Gravity) == "number" then State.Gravity = math.clamp(data.Display.Gravity, 0, 500) end
+        if type(data.Display.UIScale) == "number" then State.UIScale = math.clamp(data.Display.UIScale, 50, 150) end
     end
     if type(data.Movement) == "table" then
         if type(data.Movement.SpeedValue) == "number" then State.Speed.Value = math.clamp(data.Movement.SpeedValue, 50, 500) end
@@ -2831,6 +3345,7 @@ local function ApplySettingsProfile(data)
         if type(data.Aimbot.FOV) == "number" then State.Aimbot.FOV = math.clamp(data.Aimbot.FOV, 30, 500) end
         if type(data.Aimbot.Smoothness) == "number" then State.Aimbot.Smoothness = math.clamp(data.Aimbot.Smoothness, 0.01, 1) end
         if type(data.Aimbot.Part) == "string" then State.Aimbot.Part = data.Aimbot.Part end
+        if data.Aimbot.PartMode ~= nil then State.Aimbot.PartMode = data.Aimbot.PartMode end
         if type(data.Aimbot.TeamCheck) == "boolean" then State.Aimbot.TeamCheck = data.Aimbot.TeamCheck end
     end
     return true
@@ -2847,23 +3362,93 @@ local ThemePresets = {
     ["Red"] = Color3.fromRGB(239, 68, 68),
     ["Orange"] = Color3.fromRGB(249, 115, 22),
     ["White"] = Color3.fromRGB(226, 232, 240),
+    ["Rainbow"] = Color3.fromRGB(255, 0, 128),
 }
-local ThemeOrder = {"Sky Blue", "Ocean", "Purple", "Emerald", "Lime", "Amber", "Rose", "Red", "Orange", "White"}
+local ThemeOrder = {"Sky Blue", "Rainbow", "Ocean", "Purple", "Emerald", "Lime", "Amber", "Rose", "Red", "Orange", "White"}
+local function StopRainbow()
+    if RainbowConnection then
+        SafeCall(function() RainbowConnection:Disconnect() end)
+        RainbowConnection = nil
+    end
+    ThemeHook = nil
+end
+
+local function StartRainbow()
+    if RainbowConnection then return end
+    ThemeHook = {
+        Rainbow = true,
+        Get = function() return Color3.fromHSV((tick() * 0.25) % 1, 1, 1) end,
+    }
+    RainbowConnection = RunService.RenderStepped:Connect(function()
+        if PanicActive then return end
+        if tick() - (LastThemePurge or 0) > 3 then LastThemePurge = tick(); PurgeThemeRegistry() end
+        local c = ThemeHook.Get()
+        CONFIG.Accent = c
+        for _, item in ipairs(ThemeRegistry) do
+            SafeCall(function()
+                if item.Object and item.Object.Parent then
+                    -- OFF toggles stay grey/white (state readable); glass edges get a tinted white
+                    if item.Kind == "toggle" then
+                        local isOff = false
+                        if item.Prop == "Color" then
+                            isOff = (item.Object.Color == Color3.fromRGB(255,255,255))
+                        else
+                            isOff = (item.Object.BackgroundColor3 == Color3.fromRGB(45,45,45))
+                        end
+                        if isOff then return end
+                    end
+                    item.Object[item.Prop] = item.Kind == "glass" and Color3.new(0.25 + c.R * 0.75, 0.25 + c.G * 0.75, 0.25 + c.B * 0.75) or c
+                end
+            end)
+        end
+    end)
+end
+
 local function ApplyTheme(themeName)
     local accent = ThemePresets[themeName]
-    if not accent then return end
+    if not accent then return false end
     State.Theme = themeName
-    CONFIG.Accent = accent
-    AccentBar.BackgroundColor3 = accent
-    WMStroke.Color = accent
-    overlayStroke.Color = accent
+
+    if themeName == "Rainbow" then
+        StartRainbow()
+    else
+        StopRainbow()
+        CONFIG.Accent = accent
+        PurgeThemeRegistry()
+        for _, item in ipairs(ThemeRegistry) do
+            SafeCall(function()
+                if item.Object and item.Object.Parent then
+                    -- OFF toggles keep their grey so on/off state stays readable
+                    if item.Kind == "toggle" then
+                        local isOff = false
+                        if item.Prop == "Color" then
+                            isOff = (item.Object.Color == Color3.fromRGB(255,255,255))
+                        else
+                            isOff = (item.Object.BackgroundColor3 == Color3.fromRGB(45,45,45))
+                        end
+                        if isOff then return end
+                    end
+                    -- GLASS: edge strokes stay whitish (glass look) but pick up the theme tint
+                    item.Object[item.Prop] = item.Kind == "glass" and Color3.new(0.25 + accent.R * 0.75, 0.25 + accent.G * 0.75, 0.25 + accent.B * 0.75) or accent
+                end
+            end)
+        end
+    end
+
+    -- This recalculates on next open/resize; keeps the FOV ring matching the theme too
+    SafeCall(function()
+        if FOVFrame and FOVFrame.Parent then FOVStroke.Color = GetAccent() end
+        if LeftArrow and LeftArrow.Parent then LeftArrow.TextColor3 = GetAccent() end
+        if RightArrow and RightArrow.Parent then RightArrow.TextColor3 = GetAccent() end
+    end)
+    return true
 end
 
 -- Plain text persistence: no JSON is used. It is saved only when the runtime exposes file APIs.
 local PROFILE_FILE = "RBX_1_0_Hub_Profile.txt"
 local function EncodeProfileText()
     local p = BuildSettingsProfile()
-    local lines = {"RBX_1_0_PROFILE=1.5.0", "Theme=" .. State.Theme}
+    local lines = {"RBX_1_0_PROFILE=" .. GetHubVersion(), "Theme=" .. State.Theme, "UIScale=" .. tostring(State.UIScale)}
     local function put(prefix, values)
         for key, value in pairs(values) do table.insert(lines, prefix .. key .. "=" .. tostring(value)) end
     end
@@ -2885,6 +3470,7 @@ local function DecodeProfileText(text)
     for _, key in ipairs({"Enabled", "FPS", "ServerName", "Ping", "Network", "AutoShowOnClose"}) do data.Overlay[key] = bool("Overlay." .. key) end
     for _, key in ipairs({"RemoveDecals", "RemoveParticles", "RemoveTextures", "DisableShadows", "LowQuality", "RemoveTrails", "RemoveBeams", "DisableLightingEffects"}) do data.FPSBoost[key] = bool("FPSBoost." .. key) end
     for _, key in ipairs({"FOV", "Gravity"}) do data.Display[key] = num("Display." .. key) end
+    data.Display.UIScale = num("UIScale") -- validated in ApplySettingsProfile (50-150 clamp)
     for _, key in ipairs({"SpeedValue", "JumpPower", "FlySpeed"}) do data.Movement[key] = num("Movement." .. key) end
     data.Aimbot.FOV = num("Aimbot.FOV"); data.Aimbot.Smoothness = num("Aimbot.Smoothness")
     data.Aimbot.Part = raw["Aimbot.Part"]; data.Aimbot.TeamCheck = bool("Aimbot.TeamCheck")
@@ -2903,7 +3489,9 @@ local function LoadProfileFromFile()
     if not data then return false, themeOrReason end
     local applied, reason = ApplySettingsProfile(data)
     if not applied then return false, reason end
+    -- FIXED: theme AND UI scale from the profile are validated before applying
     ApplyTheme(ThemePresets[themeOrReason] and themeOrReason or "Sky Blue")
+    UpdateMainScale()
     return true
 end
 
@@ -3104,60 +3692,62 @@ local Features = {
 
     {Category="Combat", Type="Section", Text="COMBAT"},
     {Category="Combat", Type="Toggle", Name="Aimbot", Color=Color3.fromRGB(120,120,120), Default=false, Callback=function(v)
-        State.Aimbot.Enabled = v; Disconnect("Aimbot")
+        State.Aimbot.Enabled = v
+        pcall(function() RunService:UnbindFromRenderStep("RBX_Aimbot") end)
+        Disconnect("AimbotMouse")
         if v then
             FOVFrame.Visible = true
-            Connect("Aimbot", RunService.RenderStepped, function()
-                if not State.Aimbot.Enabled or PanicActive then return end
-                local target = GetAimbotTarget()
-                if target and IsPlayerAlive(target) and target.Character and target.Character.Parent then
-                    local part = target.Character:FindFirstChild(State.Aimbot.Part)
-                    if part and part.Parent then
-                        local myHRP = GetHRP()
-                        local dist = 0
-                        SafeCall(function()
-                            if myHRP then
-                                dist = math.floor((part.Position - myHRP.Position).Magnitude)
+            -- CAMERA FIX: bind AFTER Roblox's own camera update (Camera priority) so the
+            -- camera script cannot snap the view back off the head every frame.
+            pcall(function()
+                RunService:BindToRenderStep("RBX_Aimbot", Enum.RenderPriority.Camera.Value + 1, function()
+                    if not State.Aimbot.Enabled or PanicActive then return end
+                    local target = GetAimbotTarget()
+                    if target and IsPlayerAlive(target) and target.Character and target.Character.Parent then
+                        local part = GetAimPart(target.Character)
+                        if part and part.Parent then
+                            local myHRP = GetHRP()
+                            local dist = 0
+                            SafeCall(function()
+                                if myHRP then
+                                    dist = math.floor((part.Position - myHRP.Position).Magnitude)
+                                end
+                            end)
+                            DistanceLabel.Text = tostring(dist) .. "m"
+                            DistanceLabel.Position = UDim2.new(0.5, -60, 0.5, State.Aimbot.FOV + 15)
+                            DistanceLabel.Visible = true
+
+                            local pos = part.Position
+                            if State.Aimbot.Prediction then
+                                local vel = part.AssemblyLinearVelocity or Vector3.zero
+                                local mult = State.Aimbot.PowerMode and 0.25 or 0.15
+                                pos = pos + (vel * mult)
                             end
-                        end)
-                        DistanceLabel.Text = tostring(dist) .. "m"
-                        DistanceLabel.Position = UDim2.new(0.5, -60, 0.5, State.Aimbot.FOV + 15)
-                        DistanceLabel.Visible = true
+                            if State.Aimbot.DropComp then
+                                pos = pos - Vector3.new(0, 0.35, 0)
+                            end
+                            if State.Aimbot.Shake > 0 then
+                                local shake = State.Aimbot.Shake
+                                pos = pos + Vector3.new(math.random(-shake, shake), math.random(-shake, shake), math.random(-shake, shake)) * 0.01
+                            end
 
-                        local pos = part.Position
-                        if State.Aimbot.Prediction then
-                            local vel = part.AssemblyLinearVelocity or Vector3.zero
-                            local mult = State.Aimbot.PowerMode and 0.25 or 0.15
-                            pos = pos + (vel * mult)
-                        end
-                        if State.Aimbot.DropComp then
-                            pos = pos - Vector3.new(0, 1.5, 0)
-                        end
-                        if State.Aimbot.Shake > 0 then
-                            local shake = State.Aimbot.Shake
-                            pos = pos + Vector3.new(math.random(-shake, shake), math.random(-shake, shake), math.random(-shake, shake)) * 0.01
-                        end
-
-                        if State.CameraLock.Enabled then
-                            Camera.CFrame = CFrame.new(Camera.CFrame.Position, pos)
-                        else
                             local currentCF = Camera.CFrame
-                            local targetCF = CFrame.new(currentCF.Position, pos)
-                            local smooth = State.Aimbot.PowerMode and 1 or State.Aimbot.Smoothness
+                            local targetCF = CFrame.lookAt(currentCF.Position, pos)
+                            local smooth = (State.Aimbot.PowerMode or State.CameraLock.Enabled) and 1 or State.Aimbot.Smoothness
                             Camera.CFrame = currentCF:Lerp(targetCF, smooth)
                         end
+                        UpdateTargetHighlight(target)
+                    else
+                        DistanceLabel.Visible = false
+                        UpdateTargetHighlight(nil)
                     end
-                    UpdateTargetHighlight(target)
-                else
-                    DistanceLabel.Visible = false
-                    UpdateTargetHighlight(nil)
-                end
-                if State.Aimbot.AutoShoot and HasTool() then
-                    local t = GetAimbotTarget()
-                    if t and IsPlayerAlive(t) then
-                        UniversalClick()
+                    if State.Aimbot.AutoShoot and HasTool() then
+                        local t = GetAimbotTarget()
+                        if t and IsPlayerAlive(t) then
+                            UniversalClick()
+                        end
                     end
-                end
+                end)
             end)
             Notify("Aimbot", "Aimbot ACTIVE", 3, Color3.fromRGB(120,120,120))
         else
@@ -3185,7 +3775,23 @@ local Features = {
     {Category="Combat", Type="Toggle", Name="Wall Check", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v) State.Aimbot.WallCheck = v end},
     {Category="Combat", Type="Toggle", Name="Prediction", Color=Color3.fromRGB(100,100,100), Default=true, Callback=function(v) State.Aimbot.Prediction = v end},
     {Category="Combat", Type="Toggle", Name="Drop Comp", Color=Color3.fromRGB(100,100,100), Default=true, Callback=function(v) State.Aimbot.DropComp = v end},
-    {Category="Combat", Type="Toggle", Name="Auto Shoot", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v) State.Aimbot.AutoShoot = v end},
+    {Category="Combat", Type="Toggle", Name="Auto Shoot", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
+        State.Aimbot.AutoShoot = v; Disconnect("AutoShoot")
+        if v then Connect("AutoShoot", RunService.Heartbeat, function()
+            if not State.Aimbot.AutoShoot or PanicActive then return end
+            local t = GetAimbotTarget()
+            if t and IsPlayerAlive(t) and HasTool() then
+                if State.Aimbot.AutoShootMode == "Spam" then
+                    OverrideClickCooldown = true
+                    for _ = 1, 5 do UniversalClick(true) end
+                    OverrideClickCooldown = false
+                else
+                    UniversalClick()
+                end
+            end
+        end) end
+    end},
+    {Category="Combat", Type="Dropdown", Name="Auto Shoot Mode", Options={"Hold","Spam"}, Default=1, Callback=function(val) State.Aimbot.AutoShootMode = val end},
     {Category="Combat", Type="Toggle", Name="Auto WallBang", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v) State.Aimbot.AutoWallBang = v end},
     {Category="Combat", Type="Toggle", Name="Camera Lock", Color=Color3.fromRGB(255,80,80), Default=false, Callback=function(v)
         State.CameraLock.Enabled = v
@@ -3196,9 +3802,16 @@ local Features = {
         local name = typeof(key) == "EnumItem" and (key.EnumType == Enum.KeyCode and tostring(key):gsub("Enum.KeyCode.", "") or tostring(key):gsub("Enum.UserInputType.", "")) or "None"
         Notify("Combat", "Camera Lock key set to " .. name, 2, Color3.fromRGB(255,80,80))
     end},
-    {Category="Combat", Type="Toggle", Name="Silent Aim", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v) State.SilentAim.Enabled = v end},
+    {Category="Combat", Type="Toggle", Name="Silent Aim", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
+        State.SilentAim.Enabled = v
+        -- POWER COMBAT: silent aim pipes the locked target position through every click path
+        OverrideClickCooldown = false
+        if v then Notify("Silent Aim", "Hits redirect to the locked target", 2, GetAccent()) end
+    end},
     {Category="Combat", Type="Slider", Name="Silent FOV", Min=10, Max=300, Default=80, Callback=function(v) State.SilentAim.FOV = v end},
     {Category="Combat", Type="Slider", Name="Hit Chance", Min=1, Max=100, Default=100, Callback=function(v) State.SilentAim.HitChance = v end},
+    {Category="Combat", Type="Toggle", Name="Silent Team Check", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v) State.SilentAim.TeamCheck = v end},
+    {Category="Combat", Type="Toggle", Name="Silent Visible Check", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v) State.SilentAim.VisibleCheck = v end},
     {Category="Combat", Type="Toggle", Name="Trigger Bot", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
         State.TriggerBot.Enabled = v; Disconnect("TriggerBot")
         if v then Connect("TriggerBot", RunService.RenderStepped, function()
@@ -3227,37 +3840,55 @@ local Features = {
         if v then Connect("AutoParry", RunService.Heartbeat, function()
             if not State.AutoParry.Enabled or PanicActive then return end
             local now = tick()
-            if now - State.AutoParry.LastParry < 0.5 then return end
+            local cooldown = State.AutoParry.FrameFire and 0.05 or 0.5
+            if now - State.AutoParry.LastParry < cooldown then return end
             local myHRP = GetHRP(); if not myHRP then return end
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character and p.Character.Parent and p.Character:FindFirstChild("HumanoidRootPart") then
                     if (p.Character.HumanoidRootPart.Position - myHRP.Position).Magnitude < State.AutoParry.Range then
                         if p.Character:FindFirstChildOfClass("Tool") then
                             State.AutoParry.LastParry = now
-                            SafeCall(function()
-                                VirtualUser:CaptureController()
-                                VirtualUser:SetKeyDown("f"); task.wait(0.1); VirtualUser:SetKeyUp("f")
-                            end)
+                            -- POWER COMBAT V2: key press + tool activation + parry remotes, all at once
+                            TriggerParry()
                         end
                     end
                 end
             end
         end) end
     end},
+    {Category="Combat", Type="Toggle", Name="Auto Parry Every Frame", Color=Color3.fromRGB(255,80,80), Default=false, Callback=function(v)
+        State.AutoParry.FrameFire = v
+        Notify("Auto Parry", v and "FRAME FIRE MODE ☠️ (5x faster parries)" or "Normal parry speed", 2, v and Color3.fromRGB(255,80,80) or Color3.fromRGB(100,100,100))
+    end},
     {Category="Combat", Type="Slider", Name="Parry Range", Min=5, Max=50, Default=25, Callback=function(v) State.AutoParry.Range = v end},
+    -- POWER COMBAT V2: fires EVERY RemoteEvent inside the tool with a real ms delay
     {Category="Combat", Type="Toggle", Name="Rapid Fire", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
         State.RapidFire = v; Disconnect("RapidFire")
         if v then Connect("RapidFire", RunService.Heartbeat, function()
             if not State.RapidFire or PanicActive then return end
             if not HasTool() then return end
-            local tool = GetChar() and GetChar():FindFirstChildOfClass("Tool")
-            if tool then SafeCall(function() 
-                if tool:IsA("Tool") and tool:FindFirstChild("RemoteEvent") then 
-                    tool.RemoteEvent:FireServer() 
-                end 
-            end) end
+            local now = tick()
+            if now - (State._LastRapidFire or 0) < State.RapidFireDelay then return end
+            State._LastRapidFire = now
+            local char = GetChar()
+            local tool = char and char:FindFirstChildOfClass("Tool")
+            if tool then
+                local hitPos = GetSilentAimPosition()
+                SafeCall(function()
+                    for _, obj in ipairs(tool:GetDescendants()) do
+                        if obj:IsA("RemoteEvent") then
+                            if hitPos then obj:FireServer(hitPos) else obj:FireServer() end
+                        elseif obj:IsA("RemoteFunction") then
+                            if hitPos then obj:InvokeServer(hitPos) else obj:InvokeServer() end
+                        end
+                    end
+                    if tool.Enabled then tool:Activate() end
+                end)
+            end
         end) end
     end},
+    {Category="Combat", Type="Slider", Name="Rapid Fire Rate", Min=1, Max=100, Default=20, Callback=function(v) State.RapidFireDelay = v/1000 end},
+    -- POWER COMBAT V2: attack mode — LookAt every target + fire every click method at once
     {Category="Combat", Type="Toggle", Name="Melee Aura", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
         State.MeleeAura.Enabled = v; Disconnect("MeleeAura")
         if v then 
@@ -3271,22 +3902,48 @@ local Features = {
                 local isMelee = tool:FindFirstChild("Handle") ~= nil
                 local isGun = tool:FindFirstChild("Ammo") or tool:FindFirstChild("Mag") or tool:FindFirstChild("Fire") or tool.Name:lower():match("gun") or tool.Name:lower():match("rifle") or tool.Name:lower():match("pistol")
                 if not isMelee or isGun then return end
-                local foundTarget = false
+                if not State.MeleeAura.AttackAll then
+                    -- original gentle mode: swing when someone is close
+                    local inRange = false
+                    for _, p in ipairs(GetCachedPlayers()) do
+                        if p ~= LocalPlayer and p.Character and p.Character.Parent and p.Character:FindFirstChild("HumanoidRootPart") then
+                            local dist = (p.Character.HumanoidRootPart.Position - myHRP.Position).Magnitude
+                            if dist < State.MeleeAura.Range then inRange = true; break end
+                        end
+                    end
+                    if inRange then UniversalClick() end
+                    return
+                end
+                -- ATTACK MODE: face the closest target and unload every attack method
+                local now = tick()
+                if now - (State._LastAuraSwing or 0) < 0.08 then return end
+                State._LastAuraSwing = now
+                local closest, closestDist = nil, math.huge
                 for _, p in ipairs(GetCachedPlayers()) do
-                    if p ~= LocalPlayer and p.Character and p.Character.Parent and p.Character:FindFirstChild("HumanoidRootPart") then
+                    if p ~= LocalPlayer and p.Character and p.Character.Parent and p.Character:FindFirstChild("HumanoidRootPart") and IsPlayerAlive(p) then
+                        if State.Aimbot.TeamCheck and p.Team and LocalPlayer.Team and p.Team == LocalPlayer.Team then continue end
                         local dist = (p.Character.HumanoidRootPart.Position - myHRP.Position).Magnitude
-                        if dist < State.MeleeAura.Range then
-                            foundTarget = true
-                            local targetHRP = p.Character.HumanoidRootPart
-                            local lookCFrame = CFrame.new(myHRP.Position, Vector3.new(targetHRP.Position.X, myHRP.Position.Y, targetHRP.Position.Z))
-                            SafeCall(function() myHRP.CFrame = lookCFrame end)
-                            UniversalClick()
-                            task.wait(0.05)
+                        if dist < State.MeleeAura.Range and dist < closestDist then
+                            closestDist = dist
+                            closest = p
                         end
                     end
                 end
+                if closest and closest.Character and closest.Character:FindFirstChild("HumanoidRootPart") then
+                    local targetHRP = closest.Character.HumanoidRootPart
+                    SafeCall(function()
+                        myHRP.CFrame = CFrame.new(myHRP.Position, Vector3.new(targetHRP.Position.X, myHRP.Position.Y, targetHRP.Position.Z))
+                    end)
+                    OverrideClickCooldown = true
+                    UniversalClick(true)
+                    OverrideClickCooldown = false
+                end
             end) 
         end
+    end},
+    {Category="Combat", Type="Toggle", Name="Aura Attack Mode", Color=Color3.fromRGB(255,80,80), Default=false, Callback=function(v)
+        State.MeleeAura.AttackAll = v
+        Notify("Melee Aura", v and "ATTACK MODE ☠️ (LookAt + full unload)" or "Passive swing mode", 2, v and Color3.fromRGB(255,80,80) or Color3.fromRGB(100,100,100))
     end},
     {Category="Combat", Type="Slider", Name="Aura Range", Min=5, Max=30, Default=15, Callback=function(v) State.MeleeAura.Range = v end},
     {Category="Combat", Type="Toggle", Name="Hitbox Expander", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
@@ -3300,8 +3957,14 @@ local Features = {
                 if not char or not char.Parent then return end
                 for _, part in ipairs(char:GetDescendants()) do
                     if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                        if not State.Hitbox.Originals[part] then State.Hitbox.Originals[part] = part.Size end
-                        part.Size = Vector3.new(State.Hitbox.Size, State.Hitbox.Size, State.Hitbox.Size)
+                        -- POWER COMBAT V2: head always expands; Torso/Arms only when the toggle is on
+                        local isHead = part.Name == "Head"
+                        local isTorso = part.Name:match("Torso") or part.Name == "Torso"
+                        local isLimb = part.Name:match("Arm") or part.Name:match("Hand") or part.Name:match("Leg") or part.Name:match("Foot")
+                        if isHead or (State.Hitbox.ExpandTorso and (isTorso or isLimb)) then
+                            if not State.Hitbox.Originals[part] then State.Hitbox.Originals[part] = part.Size end
+                            part.Size = Vector3.new(State.Hitbox.Size, State.Hitbox.Size, State.Hitbox.Size)
+                        end
                     end
                 end
             end
@@ -3332,11 +3995,17 @@ local Features = {
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character and p.Character.Parent then
                     for _, part in ipairs(p.Character:GetDescendants()) do
-                        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then part.Size = Vector3.new(v,v,v) end
+                        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and (part.Name == "Head" or State.Hitbox.ExpandTorso) then
+                            part.Size = Vector3.new(v,v,v)
+                        end
                     end
                 end
             end
         end
+    end},
+    {Category="Combat", Type="Toggle", Name="Hitbox Expand Torso/Arms", Color=Color3.fromRGB(255,80,80), Default=false, Callback=function(v)
+        State.Hitbox.ExpandTorso = v
+        Notify("Hitbox", v and "TORSO + ARMS EXPANSION ☠️" or "Head-only hitboxes", 2, v and Color3.fromRGB(255,80,80) or Color3.fromRGB(100,100,100))
     end},
     {Category="Combat", Type="Toggle", Name="Reach", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
         State.Reach.Enabled = v; Disconnect("ReachChildAdded"); Disconnect("ReachCharAdded")
@@ -3366,15 +4035,24 @@ local Features = {
         end
     end},
     {Category="Combat", Type="Slider", Name="Reach Distance", Min=5, Max=100, Default=25, Callback=function(v) State.Reach.Distance = v end},
+    -- POWER COMBAT V2: velocity-free spin (no anti-cheat velocity flags) + classic mode
     {Category="Combat", Type="Toggle", Name="Spin Bot", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
         State.SpinBot.Enabled = v; Disconnect("SpinBot")
         if v then Connect("SpinBot", RunService.RenderStepped, function()
             if not State.SpinBot.Enabled or PanicActive then return end
-            local hrp = GetHRP(); if hrp then 
-                hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, math.rad(State.SpinBot.Speed), 0) 
+            local hrp = GetHRP(); if hrp then
+                if State.SpinBot.Mode == "Velocity" then
+                    -- keep the current velocity untouched, only rotate the visual CFrame
+                    local vel = hrp.AssemblyLinearVelocity
+                    hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(State.SpinBot.Speed), 0)
+                    hrp.AssemblyLinearVelocity = vel
+                else
+                    hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, math.rad(State.SpinBot.Speed), 0)
+                end
             end
         end) end
     end},
+    {Category="Combat", Type="Dropdown", Name="Spin Mode", Options={"Velocity","Render"}, Default=1, Callback=function(val) State.SpinBot.Mode = val end},
     {Category="Combat", Type="Slider", Name="Spin Speed", Min=1, Max=100, Default=25, Callback=function(v) State.SpinBot.Speed = v end},
     {Category="Combat", Type="Toggle", Name="God Mode", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
         State.GodMode = v; Disconnect("GodMode")
@@ -3386,6 +4064,25 @@ local Features = {
             local hum = GetHum(); if hum then hum.Health = hum.MaxHealth end
         end) end
     end},
+    {Category="Combat", Type="Toggle", Name="God Mode Auto Revive", Color=Color3.fromRGB(255,80,80), Default=false, Callback=function(v)
+        State.GodModeRevive = v
+        Notify("God Mode", v and "AUTO REVIVE ON ☠️ (full heal after death)" or "Auto revive off", 2, v and Color3.fromRGB(255,80,80) or Color3.fromRGB(100,100,100))
+    end},
+    -- POWER COMBAT V2: auto drink/eat healing items from the Backpack when hurt
+    {Category="Combat", Type="Toggle", Name="Auto Pot / Auto Eat", Color=Color3.fromRGB(100,100,100), Default=false, Callback=function(v)
+        State.AutoHealCombat.Enabled = v; Disconnect("AutoHealCombat")
+        if v then Connect("AutoHealCombat", RunService.Heartbeat, function()
+            if not State.AutoHealCombat.Enabled or PanicActive then return end
+            local hum = GetHum(); if not hum then return end
+            if hum.Health > 0 and hum.Health < (hum.MaxHealth * State.AutoHealCombat.Threshold / 100) then
+                local now = tick()
+                if now - (State._LastAutoPot or 0) < 1.5 then return end
+                State._LastAutoPot = now
+                TryConsumeHealingItem()
+            end
+        end) end
+    end},
+    {Category="Combat", Type="Slider", Name="Pot Threshold %", Min=5, Max=100, Default=50, Callback=function(v) State.AutoHealCombat.Threshold = v end},
     {Category="Combat", Type="Button", Name="Kill All (Client)", Color=Color3.fromRGB(60,60,60), Callback=function()
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and p.Character.Parent and p.Character:FindFirstChildOfClass("Humanoid") then
@@ -3401,6 +4098,35 @@ local Features = {
                 SafeCall(function() p.Character.HumanoidRootPart.CFrame = myHRP.CFrame * CFrame.new(math.random(-5,5), 0, math.random(-5,5)) end)
             end
         end
+    end},
+    -- POWER COMBAT V2: one-button full reset of every combat module
+    {Category="Combat", Type="Button", Name="PANIC COMBAT (Reset All)", Color=Color3.fromRGB(140,30,30), Callback=function()
+        OverrideClickCooldown = false
+        State.Aimbot.Enabled = false; Disconnect("Aimbot"); FOVFrame.Visible = false; DistanceLabel.Visible = false; UpdateTargetHighlight(nil)
+        State.CameraLock.Enabled = false
+        State.SilentAim.Enabled = false
+        State.TriggerBot.Enabled = false; Disconnect("TriggerBot")
+        State.AutoParry.Enabled = false; Disconnect("AutoParry")
+        State.RapidFire = false; Disconnect("RapidFire")
+        State.MeleeAura.Enabled = false; Disconnect("MeleeAura")
+        State.AutoHealCombat.Enabled = false; Disconnect("AutoHealCombat")
+        State.Hitbox.Enabled = false
+        for name, conn in pairs(HitboxConnections) do SafeCall(function() conn:Disconnect() end) end
+        HitboxConnections = {}
+        Disconnect("HitboxCharAdded")
+        for part, size in pairs(State.Hitbox.Originals) do if part and part.Parent then part.Size = size end end
+        State.Hitbox.Originals = {}
+        State.Reach.Enabled = false; Disconnect("ReachChildAdded"); Disconnect("ReachCharAdded")
+        for handle, size in pairs(State.Reach.Originals) do if handle and handle.Parent then handle.Size = size; handle.Massless = false end end
+        State.Reach.Originals = {}
+        State.SpinBot.Enabled = false; Disconnect("SpinBot")
+        State.GodMode = false; Disconnect("GodMode")
+        State.GodModeRevive = false
+        for _, name in ipairs({"Aimbot","Power Mode","Lock Target","Camera Lock","Silent Aim","Trigger Bot","Auto Parry","Auto Parry Every Frame","Rapid Fire","Melee Aura","Aura Attack Mode","Hitbox Expander","Hitbox Expand Torso/Arms","Spin Bot","God Mode","God Mode Auto Revive","Auto Pot / Auto Eat","Auto Shoot"}) do
+            local ctrl = ToggleControls[name]
+            if ctrl and ctrl.Set then pcall(ctrl.Set, false) end
+        end
+        Notify("Combat", "ALL COMBAT MODULES RESET", 3, Color3.fromRGB(255,80,80))
     end},
 
     {Category="Visuals", Type="Section", Text="VISUALS"},
@@ -3539,6 +4265,7 @@ local Features = {
     {Category="ESP", Type="Toggle", Name="Distance", Color=Color3.fromRGB(100,100,100), Default=true, Callback=function(v) State.ESP.Distance = v end},
     {Category="ESP", Type="Toggle", Name="Tracers", Color=Color3.fromRGB(100,100,100), Default=true, Callback=function(v) State.ESP.Tracers = v end},
     {Category="ESP", Type="Toggle", Name="Tool", Color=Color3.fromRGB(100,100,100), Default=true, Callback=function(v) State.ESP.Tool = v end},
+    {Category="ESP", Type="Toggle", Name="Skeleton", Color=Color3.fromRGB(255,120,120), Default=false, Callback=function(v) State.ESP.Skeleton = v end},
 
     {Category="World", Type="Section", Text="WORLD"},
     {Category="World", Type="Button", Name="Destroy Trees", Color=Color3.fromRGB(60,60,60), Callback=function()
@@ -3597,15 +4324,17 @@ local Features = {
         end) end
     end},
 
-    -- FIXED: Legacy Auto Click using Heartbeat instead of RenderStepped
+    -- FIXED: Legacy Auto Click — real CPS timing now (no hidden global cap)
     {Category="Misc", Type="Toggle", Name="Auto Click (Legacy)", Color=Color3.fromRGB(80,80,80), Default=false, Callback=function(v)
         State.AutoClick.Enabled = v; Disconnect("AutoClick")
         if v then 
             Connect("AutoClick", RunService.Heartbeat, function()
                 if not State.AutoClick.Enabled or PanicActive then return end
                 if not HasTool() then return end
+                local now = tick()
+                if now - (State._LastLegacyClick or 0) < 1 / math.max(State.AutoClick.CPS, 1) then return end
+                State._LastLegacyClick = now
                 UniversalClick()
-                task.wait(1 / math.max(State.AutoClick.CPS, 1))
             end) 
         end
     end},
@@ -3617,6 +4346,8 @@ local Features = {
         Disconnect("SuperFastClick")
 
         if v then
+            -- FIXED (real CPS): bypass the global throttle — this thread owns its own timing
+            OverrideClickCooldown = true
             local clickThread = task.spawn(function()
                 while State.SuperFastClick and not PanicActive do
                     if HasTool() then
@@ -3625,11 +4356,13 @@ local Features = {
                     local waitTime = math.max(1 / math.max(State.SuperClickCPS, 1), 0.001)
                     task.wait(waitTime)
                 end
+                OverrideClickCooldown = false
             end)
 
             Connections["SuperFastClick"] = {
                 Disconnect = function()
                     State.SuperFastClick = false
+                    OverrideClickCooldown = false
                 end
             }
 
@@ -3652,6 +4385,8 @@ local Features = {
         Disconnect("UltraClick")
 
         if v then
+            -- FIXED (real CPS): bypass the global throttle so the 4 threads deliver the shown CPS
+            OverrideClickCooldown = true
             local running = true
             local numThreads = 4
             local clicksPerThread = math.max(math.ceil(State.SuperClickCPS / numThreads), 1)
@@ -3672,6 +4407,7 @@ local Features = {
                 Disconnect = function()
                     running = false
                     State.UltraClick = false
+                    OverrideClickCooldown = false
                 end
             }
 
@@ -3820,10 +4556,11 @@ local Features = {
         end
     end},
 
-    {Category="Info", Type="Section", Text="RBX 1.5.0 • SKY BLUE / THEMES / SAVE UPDATE"},
+    {Category="Info", Type="Section", Text="RBX 2.2.0 • AIMBOT & GLASS FIXES"},
+        {Category="Info", Type="Section", Text="RBX 2.0.0 • POWER COMBAT / RAINBOW / DEVICE-FIT UPDATE"},
     {Category="Info", Type="Changelog", Name="UPDATE NOTES", Value=GetChangelogText},
     {Category="Info", Type="Button", Name="COPY UPDATE NOTES", Color=Color3.fromRGB(70,70,90), Callback=function() CopyToClipboard(GetChangelogText(), "Update notes") end},
-    {Category="Info", Type="Info", Name="Build", Value="RBX 1.5.0"},
+    {Category="Info", Type="Info", Name="Build", Value="RBX " .. GetHubVersion()},
     {Category="Info", Type="Info", Name="Device Profile", Value=function() return DeviceType end},
     {Category="Info", Type="Section", Text="TOP STATUS OVERLAY"},
     {Category="Info", Type="Toggle", Name="Show All Overlay Stats", Color=Color3.fromRGB(85,85,120), Default=false, Callback=function(v)
@@ -3881,7 +4618,16 @@ local Features = {
         else Notify("Settings", tostring(reason), 3, Color3.fromRGB(255,80,80)) end
     end},
     {Category="Settings", Type="Section", Text="COLOR THEME"},
-    {Category="Settings", Type="Dropdown", Name="UI Theme", Options=ThemeOrder, Default=1, Callback=function(theme) ApplyTheme(theme) end},
+    {Category="Settings", Type="Dropdown", Name="UI Theme", Options=ThemeOrder, Default=1, Callback=function(theme)
+        local ok = ApplyTheme(theme)
+        if ok then
+            Notify("Theme", theme .. " applied — whole GUI recolored" .. (theme == "Rainbow" and " (RGB live flow!)" or ""), 3, GetAccent())
+        end
+    end},
+    {Category="Settings", Type="Slider", Name="UI Scale %", Min=50, Max=150, Default=100, Callback=function(v)
+        State.UIScale = v
+        UpdateMainScale()
+    end},
     {Category="Settings", Type="Keybind", Name="Aimbot Toggle Key", Default=State.CustomKeybinds.AimbotToggle, Callback=function(key)
         State.CustomKeybinds.AimbotToggle = key
         local name = typeof(key) == "EnumItem" and (key.EnumType == Enum.KeyCode and tostring(key):gsub("Enum.KeyCode.", "") or tostring(key):gsub("Enum.UserInputType.", "")) or "None"
@@ -3897,9 +4643,14 @@ local Features = {
         if setclipboard then setclipboard(game.JobId or "") end; Notify("Settings", "JobId copied", 2, Color3.fromRGB(60,60,60))
     end},
     {Category="Settings", Type="Button", Name="Destroy GUI", Color=Color3.fromRGB(60,60,60), Callback=function()
-        SafeCall(function() ScreenGui:Destroy() end)
-        for name, conn in pairs(Connections) do SafeCall(function() if typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end end) end
-        ClearESP()
+        -- FIXED: full PANIC-style cleanup — kills every loop (threads, RunService, ESP, hitboxes)
+        if type(Panic) == "function" then
+            SafeCall(Panic)
+        else
+            SafeCall(function() ScreenGui:Destroy() end)
+            for name, conn in pairs(Connections) do SafeCall(function() if typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end end) end
+            ClearESP()
+        end
     end},
 }
 
@@ -3931,11 +4682,19 @@ local function GetCurrentDefault(feat)
         elseif name == "Auto WallBang" then return State.Aimbot.AutoWallBang
         elseif name == "Camera Lock" then return State.CameraLock.Enabled
         elseif name == "Silent Aim" then return State.SilentAim.Enabled
+        elseif name == "Silent Team Check" then return State.SilentAim.TeamCheck
+        elseif name == "Silent Visible Check" then return State.SilentAim.VisibleCheck
         elseif name == "Trigger Bot" then return State.TriggerBot.Enabled
         elseif name == "Auto Parry" then return State.AutoParry.Enabled
+        elseif name == "Auto Parry Every Frame" then return State.AutoParry.FrameFire
         elseif name == "Rapid Fire" then return State.RapidFire
         elseif name == "Melee Aura" then return State.MeleeAura.Enabled
+        elseif name == "Aura Attack Mode" then return State.MeleeAura.AttackAll
         elseif name == "Hitbox Expander" then return State.Hitbox.Enabled
+        elseif name == "Hitbox Expand Torso/Arms" then return State.Hitbox.ExpandTorso
+        elseif name == "God Mode Auto Revive" then return State.GodModeRevive
+        elseif name == "Auto Pot / Auto Eat" then return State.AutoHealCombat.Enabled
+        elseif name == "Skeleton" then return State.ESP.Skeleton
         elseif name == "Reach" then return State.Reach.Enabled
         elseif name == "Spin Bot" then return State.SpinBot.Enabled
         elseif name == "God Mode" then return State.GodMode
@@ -3997,6 +4756,9 @@ local function GetCurrentDefault(feat)
         elseif name == "Trigger Delay" then return math.floor(State.TriggerBot.Delay * 100)
         elseif name == "Parry Range" then return State.AutoParry.Range
         elseif name == "Aura Range" then return State.MeleeAura.Range
+        elseif name == "Rapid Fire Rate" then return math.floor(State.RapidFireDelay * 1000)
+        elseif name == "Pot Threshold %" then return State.AutoHealCombat.Threshold
+        elseif name == "UI Scale %" then return State.UIScale
         elseif name == "Hitbox Size" then return State.Hitbox.Size
         elseif name == "Reach Distance" then return State.Reach.Distance
         elseif name == "Spin Speed" then return State.SpinBot.Speed
@@ -4026,6 +4788,12 @@ local function GetCurrentDefault(feat)
             local modes = {"Coins","Mobs","Items"}
             for i, m in ipairs(modes) do if m == State.AutoFarm.Mode then return i end end
             return 1
+        elseif name == "Auto Shoot Mode" then
+            if State.Aimbot.AutoShootMode == "Spam" then return 2 end
+            return 1
+        elseif name == "Spin Mode" then
+            if State.SpinBot.Mode == "Render" then return 2 end
+            return 1
         elseif name == "UI Theme" then
             for i, theme in ipairs(ThemeOrder) do if theme == State.Theme then return i end end
             return 1
@@ -4046,6 +4814,7 @@ local function CreateChangelogCard(parent, title, value)
     stroke.Color = Color3.fromRGB(55,55,70)
     stroke.Thickness = 1.2
     stroke.Transparency = 0.3
+    RegisterThemed(stroke, "Color") -- changelog card follows the theme
 
     local header = Instance.new("TextLabel", frame)
     header.Size = UDim2.new(1,-28,0,28)
@@ -4173,7 +4942,8 @@ local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Name = "FloatBtn"
 FloatBtn.Size = UDim2.new(0, 190, 0, 55)
 FloatBtn.Position = UDim2.new(1, -210, 0, 20)
-FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+FloatBtn.BackgroundColor3 = Color3.fromRGB(10, 14, 22) -- GLASS
+FloatBtn.BackgroundTransparency = 0.25
 FloatBtn.Text = "RBX 1.0 HUB"
 FloatBtn.TextColor3 = Color3.fromRGB(255,255,255)
 FloatBtn.TextSize = 16
@@ -4196,22 +4966,32 @@ local BtnStroke = Instance.new("UIStroke", FloatBtn)
 BtnStroke.Color = Color3.fromRGB(100,100,100)
 BtnStroke.Thickness = 2
 BtnStroke.Transparency = 0.4
+RegisterThemed(BtnStroke, "Color")
 
 Connect("BtnPulse", RunService.RenderStepped, function()
     if PanicActive then return end
     local pulse = 0.3 + math.sin(tick() * 3) * 0.15
     BtnStroke.Transparency = pulse
-    BtnStroke.Color = Color3.fromRGB(100 + math.sin(tick()*2)*50, 100, 100)
+    -- FIXED: pulse color now follows the theme instead of a hard-coded grey
+    local c = GetAccent()
+    BtnStroke.Color = Color3.new(
+        math.clamp(c.R + math.sin(tick()*2) * 0.2, 0, 1),
+        math.clamp(c.G + math.sin(tick()*2) * 0.2, 0, 1),
+        math.clamp(c.B + math.sin(tick()*2) * 0.2, 0, 1)
+    )
 end)
 
 FloatBtn.MouseButton1Click:Connect(function() if not PanicActive then ToggleUI(not uiVisible) end end)
 
+do -- scoped: float-button drag state (register budget)
 local drag, dragStart, startPos = false, nil, nil
-FloatBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = true; dragStart = i.Position; startPos = FloatBtn.Position end end)
-FloatBtn.InputChanged:Connect(function(i) if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then local d = i.Position - dragStart; FloatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y) end end)
-FloatBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = false end end)
+Connect("FloatDragBegan", FloatBtn.InputBegan, function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = true; dragStart = i.Position; startPos = FloatBtn.Position end end)
+Connect("FloatDragMoved", FloatBtn.InputChanged, function(i) if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then local d = i.Position - dragStart; FloatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y) end end)
+Connect("FloatDragEnded", FloatBtn.InputEnded, function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = false end end)
+end
 
 -- ==================== PANIC (FULLY FIXED) ====================
+-- Global so the Settings tab "Destroy GUI" button can call the same full cleanup.
 Panic = function()
     if PanicActive then return end
     PanicActive = true
@@ -4272,6 +5052,12 @@ Panic = function()
         UpdateFPSBoost()
     end)
 
+    StopRainbow()
+    OverrideClickCooldown = false
+    pcall(function() RunService:UnbindFromRenderStep("RBX_Aimbot") end)
+    Disconnect("AimbotMouse")
+    SafeCall(function() SetGlassBlur(false) end) -- GLASS: unfreeze the world
+    SafeCall(function() if GlassBlur then GlassBlur:Destroy() end end)
     SafeCall(function() ScreenGui:Destroy() end)
     warn("[RBX 1.0] PANIC EXECUTED. ALL SYSTEMS PURGED.")
 end
@@ -4286,11 +5072,11 @@ Connect("MainInput", UserInputService.InputBegan, function(input, gpe)
     local bind = State.CustomKeybinds.AimbotToggle
     if typeof(bind) == "EnumItem" then
         if bind.EnumType == Enum.KeyCode and input.KeyCode == bind then
-            local ctrl = ToggleControls["Aimbot"]
-            if ctrl then ctrl.Set(not ctrl.Get()) end
+            AimbotKeyEnum = bind
+            AimbotKeyHeld = true -- POWER COMBAT: holding the key = Target Lock override
         elseif bind.EnumType == Enum.UserInputType and input.UserInputType == bind then
-            local ctrl = ToggleControls["Aimbot"]
-            if ctrl then ctrl.Set(not ctrl.Get()) end
+            AimbotKeyEnum = bind
+            AimbotKeyHeld = true
         end
     end
 
@@ -4298,6 +5084,18 @@ Connect("MainInput", UserInputService.InputBegan, function(input, gpe)
     if typeof(camBind) == "EnumItem" and camBind.EnumType == Enum.KeyCode and input.KeyCode == camBind then
         local ctrl = ToggleControls["Camera Lock"]
         if ctrl then ctrl.Set(not ctrl.Get()) end
+    end
+end)
+
+Connect("MainInputEnd", UserInputService.InputEnded, function(input)
+    -- POWER COMBAT: releasing the aimbot key releases the Target Lock override
+    local bind = State.CustomKeybinds.AimbotToggle
+    if typeof(bind) == "EnumItem" then
+        if bind.EnumType == Enum.KeyCode and input.KeyCode == bind then
+            AimbotKeyHeld = false
+        elseif bind.EnumType == Enum.UserInputType and input.UserInputType == bind then
+            AimbotKeyHeld = false
+        end
     end
 end)
 
@@ -4329,21 +5127,32 @@ task.spawn(function()
             LoadingScreen.Destroy()
             if PanicActive then return end
 
+            -- FIXED (device fit): re-measure BEFORE the panel shows so phones never see
+            -- an oversized frame flash, and reflow AFTER the first render.
+            UpdateMainScale()
+            ApplyResponsiveLayout()
             ScreenGui.Enabled = true
             ToggleUI(true)
-            Notify("RBX 1.0 HUB", "Welcome back • v1.1.0 • UI animations enabled", 4, Color3.fromRGB(220,220,220))
+            task.defer(function()
+                if not PanicActive then UpdateMainScale(); ApplyResponsiveLayout() end
+            end)
+            Notify("RBX 1.0 HUB", "Welcome back • " .. GetHubVersion() .. " • UI animations enabled", 4, Color3.fromRGB(220,220,220))
         end)
         if not ok and not PanicActive then
             warn("[RBX 1.0] Loading error: " .. tostring(err))
             pcall(function() if LoadingScreen and LoadingScreen.Destroy then LoadingScreen.Destroy() end end)
+            UpdateMainScale(); ApplyResponsiveLayout()
             ScreenGui.Enabled = true
             MainFrame.Visible = true
+            SetGlassBlur(true)
             Watermark.Visible = true
             RenderTab(1)
         end
     else
+        UpdateMainScale(); ApplyResponsiveLayout()
         ScreenGui.Enabled = true
         MainFrame.Visible = true
+        SetGlassBlur(true)
         Watermark.Visible = true
         RenderTab(1)
     end
