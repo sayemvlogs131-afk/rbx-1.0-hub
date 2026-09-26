@@ -408,6 +408,61 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local GuiService = game:GetService("GuiService")
 
+-- ==================== KEY SYSTEM GATE (OPTIONAL) ====================
+-- The hub runs DIRECTLY (paste & execute) AND through RBX_KEY_SYSTEM.lua.
+-- The key system just adds the key window, auto-login and VIP whitelist on top.
+do
+	local KEY_GATE_SECRET = "9080_v3" -- set by RBX_KEY_SYSTEM.lua v4 (PlatoBoost edition)
+	local GATE_GUI_NAME = "RBX_1_0_Hub"
+	local alreadyRunning = false
+	pcall(function()
+		local pg = Players:FindFirstChild("PlayerGui")
+		alreadyRunning = pg and pg:FindFirstChild(GATE_GUI_NAME) ~= nil
+	end)
+	if false then -- GATE DISABLED: both launch paths allowed (flip to "not _G[KEY_GATE_SECRET] and not alreadyRunning" to re-lock)
+		-- GATE v2: friendly block notice. The old gate destroyed CoreGui and hung
+		-- silently (looked like "nothing happens"). Now it explains itself.
+		pcall(function()
+			local notice = Instance.new("ScreenGui")
+			notice.Name = "RBX_KeyNotice"
+			notice.ResetOnSpawn = false
+			notice.DisplayOrder = 999
+			local okCore = pcall(function() notice.Parent = game:GetService("CoreGui") end)
+			if not okCore then notice.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
+			local box = Instance.new("Frame")
+			box.Size = UDim2.new(0, 340, 0, 130)
+			box.Position = UDim2.new(0.5, -170, 0.5, -65)
+			box.BackgroundColor3 = Color3.fromRGB(12, 14, 22)
+			box.BorderSizePixel = 0
+			box.Parent = notice
+			Instance.new("UICorner", box).CornerRadius = UDim.new(0, 14)
+			local gstroke = Instance.new("UIStroke", box)
+			gstroke.Color = Color3.fromRGB(0, 170, 255)
+			gstroke.Thickness = 2
+			local t1 = Instance.new("TextLabel")
+			t1.Size = UDim2.new(1, -20, 0, 34)
+			t1.Position = UDim2.new(0, 10, 0, 12)
+			t1.BackgroundTransparency = 1
+			t1.Text = "RBX 1.0 HUB — KEY REQUIRED"
+			t1.TextColor3 = Color3.new(1, 1, 1)
+			t1.Font = Enum.Font.GothamBlack
+			t1.TextSize = 17
+			t1.Parent = box
+			local t2 = Instance.new("TextLabel")
+			t2.Size = UDim2.new(1, -30, 0, 60)
+			t2.Position = UDim2.new(0, 15, 0, 52)
+			t2.BackgroundTransparency = 1
+			t2.Text = "Execute RBX_KEY_SYSTEM.lua first and verify your key.\nMADE BY FAHIMRBX"
+			t2.TextColor3 = Color3.fromRGB(0, 255, 140)
+			t2.Font = Enum.Font.GothamBold
+			t2.TextSize = 13
+			t2.TextWrapped = true
+			t2.Parent = box
+		end)
+		return -- stop the hub cleanly (no CoreGui destruction, no hang)
+	end
+end
+
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
@@ -426,7 +481,7 @@ local CONFIG = {
     DiscordInvite = "https://discord.gg/UCF4AAAyU"
 }
 
-local function GetHubVersion() return "v2.2.0" end
+local function GetHubVersion() return "v2.3.5" end
 
 -- ==================== STATE & REGISTRIES ====================
 local State = {
@@ -1980,8 +2035,9 @@ end)
 -- Frosted-glass look: translucent dark panels + white edge highlights + soft sheen.
 -- The world behind the open panel gets a live backdrop blur (GLASS BLUR below).
 local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5) -- CENTER FIX: anchor-based centering keeps the panel in the true middle even when UIScale shrinks it on phones
 MainFrame.Name = "MainPanel"; MainFrame.Size = UDim2.new(0, CONFIG.PanelWidth, 0, CONFIG.PanelHeight)
-MainFrame.Position = UDim2.new(0.5, -CONFIG.PanelWidth/2, 0.5, -CONFIG.PanelHeight/2 + 40)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 40)
 MainFrame.BackgroundColor3 = Color3.fromRGB(16, 22, 34); MainFrame.BackgroundTransparency = 0.25
 MainFrame.BorderSizePixel = 0; MainFrame.ClipsDescendants = true; MainFrame.Visible = false
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 18)
@@ -2187,18 +2243,11 @@ local function ToggleUI(show)
     MainFrame.Visible = show
     Watermark.Visible = show
     SetGlassBlur(show) -- GLASS: frost the world while the panel is open
-    -- GLASS FIX: minimize (−) must keep the blur (panel is still open),
-    -- so blur follows the minimize state too, not just open/close.
-    SafeCall(function()
-        if GlassBlur and GlassBlur.Parent then
-            GlassBlur.Size = (show or not minimized) and 14 or 0
-        end
-    end)
     if not show and State.Overlay.AutoShowOnClose then
         State.Overlay.Enabled = true
     end
     if show then
-        MainFrame.Position = UDim2.new(0.5, -CONFIG.PanelWidth/2, 0.5, -CONFIG.PanelHeight/2 + 40)
+        MainFrame.Position = UDim2.new(0.5, 0, 0.5, 40)
         -- reopen always restores the full panel size even if it was minimized when closed
         SafeCall(function()
             MainFrame.Size = UDim2.new(0, CONFIG.PanelWidth, 0, CONFIG.PanelHeight)
@@ -2210,13 +2259,20 @@ local function ToggleUI(show)
         MainScale.Scale = targetScale * 0.92
         SafeCall(function()
             TweenService:Create(MainFrame, TweenInfo.new(0.42, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                Position = UDim2.new(0.5, -CONFIG.PanelWidth/2, 0.5, -CONFIG.PanelHeight/2)
+                Position = UDim2.new(0.5, 0, 0.5, 0) -- CENTER FIX: anchor-based final position
             }):Play()
             TweenService:Create(MainScale, TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
                 Scale = targetScale
             }):Play()
         end)
     end
+    -- BLUR SYNC (authoritative, fixes stuck blur): blur ONLY while the panel
+    -- is fully open. X close always clears it; minimize keeps it while open.
+    SafeCall(function()
+        if GlassBlur and GlassBlur.Parent then
+            GlassBlur.Size = (uiVisible and not minimized) and 14 or 0
+        end
+    end)
 end
 
 local function MakeCtrl(text, color, pos, parent)
@@ -3202,6 +3258,49 @@ end
 
 local function GetChangelogText()
     return table.concat({
+        "RBX 2.3.5 — RUN ANYWAY MODE (DIRECT OR KEY SYSTEM)",
+        "",
+        "• The hub now runs when you execute it directly AND when",
+        "  you load it through RBX_KEY_SYSTEM.lua — both ways work.",
+        "  The key system still gives you the key window, auto-login",
+        "  and the VIP whitelist on top.",
+        "",
+        "RBX 2.3.4 — KEY GATE FIX (NO MORE SILENT BLOCK)",
+        "",
+        "• FIXED: executing the hub directly did NOTHING — now a",
+        "  clear 'KEY REQUIRED' notice pops up telling you to run",
+        "  RBX_KEY_SYSTEM.lua first (the old gate nuked CoreGui",
+        "  and hung silently).",
+        "",
+        "RBX 2.3.3 — BUG FIX PASS (BLUR / CENTERING / TABS)",
+        "",
+        "FIXES",
+        "• FIXED: closing the panel with X left the screen blurred",
+        "  forever — blur now always clears on close.",
+        "• FIXED: the panel spawned near the top on some screens —",
+        "  centering is now anchor-based, so it opens in the true",
+        "  middle on ANY device, even when UIScale shrinks it.",
+        "• FIXED: the first tab was empty on fresh load — tabs now",
+        "  always render immediately.",
+        "",
+        "RBX 2.3.2 — KEY SYSTEM v4 — PLATOBOOST EDITION",
+        "",
+        "KEY SYSTEM",
+        "• FIXED: keys said 'not correct' — verification now talks",
+        "  DIRECTLY to the PLATOBOOST key server (official API),",
+        "  so real keys from the key page always pass.",
+        "• NEW: bulletproof double-file save (main + backup),",
+        "  HWID-locked, silently self-repairs, never crashes —",
+        "  built to stay stable even with a million players.",
+        "• NEW: PASTE button grabs your key straight from the",
+        "  clipboard; cool glowing key window, MADE BY FAHIMRBX.",
+        "• VIP WHITELIST: add keys in RBX_KEY_SYSTEM.lua so friends",
+        "  skip the ad links completely.",
+        "• ANTI-BYPASS: copying the hub without the key script does",
+        "  nothing — the hub refuses to load without the handshake.",
+        "• Key window shows Discord/social buttons + saved-key",
+        "  auto-check, works on every executor with HTTP support.",
+        "",
         "RBX 2.2.0 — AIMBOT & GLASS FIXES",
         "",
         "AIMBOT REWRITE",
@@ -4556,7 +4655,7 @@ local Features = {
         end
     end},
 
-    {Category="Info", Type="Section", Text="RBX 2.2.0 • AIMBOT & GLASS FIXES"},
+    {Category="Info", Type="Section", Text="RBX 2.3.5 • DIRECT + KEY SYSTEM • MADE BY FAHIMRBX"},
         {Category="Info", Type="Section", Text="RBX 2.0.0 • POWER COMBAT / RAINBOW / DEVICE-FIT UPDATE"},
     {Category="Info", Type="Changelog", Name="UPDATE NOTES", Value=GetChangelogText},
     {Category="Info", Type="Button", Name="COPY UPDATE NOTES", Color=Color3.fromRGB(70,70,90), Callback=function() CopyToClipboard(GetChangelogText(), "Update notes") end},
@@ -5133,6 +5232,7 @@ task.spawn(function()
             ApplyResponsiveLayout()
             ScreenGui.Enabled = true
             ToggleUI(true)
+            RenderTab(1) -- TAB FIX: first tab now ALWAYS renders on fresh load
             task.defer(function()
                 if not PanicActive then UpdateMainScale(); ApplyResponsiveLayout() end
             end)
